@@ -1,0 +1,191 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""CPU-only synthetic P2 producer checks; never read pixels or initialize CUDA."""
+from pathlib import Path
+from types import SimpleNamespace
+from contextlib import nullcontext
+import importlib.util
+import hashlib
+import json
+import sys
+import time
+
+sys.dont_write_bytecode = True
+OUT = Path(__file__).resolve().parent
+SPEC = importlib.util.spec_from_file_location('p2_producer_under_test', OUT/'run_p2.py')
+r = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(r)
+
+
+class FakeTensor:
+    """NumPy arithmetic only; .cuda() is an identity duck-typing method."""
+    def __init__(self, value):
+        import numpy as np
+        self.value = np.asarray(value)
+    @staticmethod
+    def unwrap(value):
+        return value.value if isinstance(value, FakeTensor) else value
+    def __add__(self, other): return FakeTensor(self.value+self.unwrap(other))
+    def __sub__(self, other): return FakeTensor(self.value-self.unwrap(other))
+    def __mul__(self, other): return FakeTensor(self.value*self.unwrap(other))
+    def __rmul__(self, other): return self*other
+    def __matmul__(self, other): return FakeTensor(self.value@self.unwrap(other))
+    def __getitem__(self, key): return FakeTensor(self.value[key])
+    def __setitem__(self, key, value): self.value[key] = self.unwrap(value)
+    @property
+    def T(self): return FakeTensor(self.value.T)
+    def sum(self, axis, keepdim=False): return FakeTensor(self.value.sum(axis=axis, keepdims=keepdim))
+    def clamp_min_(self, value):
+        import numpy as np
+        np.maximum(self.value, value, out=self.value)
+        return self
+    def min(self, axis): return SimpleNamespace(values=FakeTensor(self.value.min(axis=axis)))
+    def cpu(self): return self
+    def cuda(self): return self
+    def numpy(self): return self.value
+
+
+class FakeTorch:
+    @staticmethod
+    def from_numpy(value): return FakeTensor(value)
+    @staticmethod
+    def no_grad(): return nullcontext()
+
+
+def main():
+    import numpy as np
+    start = time.perf_counter()
+    checks = []
+    artifacts = OUT/'producer_selftest_artifacts'
+    assert not artifacts.exists(), 'Preserve the previous self-test; do not overwrite'
+    artifacts.mkdir()
+    real_out = r.OUT
+    original_top_two = r.top_two
+    def check(name, value):
+        checks.append({'name': name, 'pass': bool(value)})
+        assert value, name
+    try:
+        # Real hash/PCG64 production code, synthetic source path only.
+        for index in range(4):
+            path = f'toy/source/fit-{index:04d}.jpg'
+            odd = r.p.candidates(np, path)['odd']
+            probes = r.fit_probe_cells(np, path, odd)
+            again = r.fit_probe_cells(np, path, odd)
+            check(f'probe{index}_reproducible', np.array_equal(probes, again))
+            check(f'probe{index}_64_unique', len(probes) == len(np.unique(probes)) == 64)
+            coarse_candidates = set(((odd//64//2)*32+(odd%64//2)).tolist())
+            coarse_probes = set(((probes//64//2)*32+(probes%64//2)).tolist())
+            check(f'probe{index}_excluded_all_candidate_coarse_blocks', not coarse_candidates&coarse_probes)
+            parity_counts = {(a, b): int(np.sum(((probes//64)%2 == a)&(probes%2 == b))) for a in (0, 1) for b in (0, 1)}
+            check(f'probe{index}_16_per_phase', set(parity_counts.values()) == {16})
+        check('different_paths_produce_different_probes', not np.array_equal(
+            r.fit_probe_cells(np, 'toy/a', r.p.candidates(np, 'toy/a')['odd']),
+            r.fit_probe_cells(np, 'toy/b', r.p.candidates(np, 'toy/b')['odd'])))
+        # Replace only the GPU distance primitive, preserving producer matching,
+        # residual formulas, gate classification, best-pair logic and assignment.
+        def cpu_top_two(torch, np, query, bank, guard):
+            guard()
+            matrix = ((query[:, None, :].astype(np.float64)-bank[None, :, :].astype(np.float64))**2).sum(2)
+            indices = np.argmin(matrix, axis=1)
+            first = matrix[np.arange(len(query)), indices].copy()
+            matrix[np.arange(len(query)), indices] = np.inf
+            return first, indices, matrix.min(axis=1)
+        r.top_two = cpu_top_two
+        def toy_match_pool(remove_phase=False, direct_failure=False):
+            bank = np.asarray([[100.*index, 0.] for index in range(240)], dtype=np.float32)
+            metadata, pool = [], []
+            for camera in range(1, 6):
+                for item in range(48):
+                    anchor = (camera-1)*48+item
+                    base = bank[anchor]
+                    row = {'category': 'toy', 'path': f'toy/c{camera}/image{item:03d}',
+                           'group_key': f'toy-group-{item:03d}', 'camera': str(camera), 'research_role': 'source_fit'}
+                    controls = [[-1., 0.], [-.9, 0.]] if direct_failure else [[.97, 0.], [.90, 0.]]
+                    features = np.asarray([base+offset for offset in controls+[[1., 0.]]*3], dtype=np.float32)
+                    entries = [{'anchor_id': anchor, 'target_phase': phase, 'feature_index': j+2}
+                               for j, phase in enumerate(r.PHASES) if not (remove_phase and camera == 1 and phase == '10')]
+                    pool.append({'row': row, 'features': features, 'cells': np.asarray([325, 455, 130, 131, 194]),
+                                 'sham_indices': np.asarray([0, 1]), 'target_entries': entries})
+                    metadata.append({'prototype': anchor, 'row': 3, 'col': 3})
+            return bank, metadata, pool
+        def matching_case(name, **kwargs):
+            r.OUT = artifacts/name
+            r.OUT.mkdir()
+            bank, meta, pool = toy_match_pool(**kwargs)
+            return r.match_pairs(np, None, pool, bank, bank, meta, lambda: None)
+        selected, audit = matching_case('matching_pass')
+        check('matching_full240', selected is not None and len(selected) == 240)
+        check('matching_source_capacity1', len({row['path'] for row in selected}) == 240)
+        for camera in ('1', '2', '3', '4', '5'):
+            check('camera_'+camera+'_phase_quota16', all(sum(row['camera'] == camera and row['target_phase'] == phase for row in selected) == 16 for phase in r.PHASES))
+        check('finite_pairs_expected', audit['gate_counts']['positive_finite'] == 1440)
+        check('replacement_gate_rejects_second_control', audit['gate_counts']['replace'] == 720)
+        check('all_hard_gates_choose_first_control', audit['gate_counts']['all_hard_gates'] == 720 and all(row['sham_cell'] == 325 for row in selected))
+        check('norm_2percent_is_descriptive', any(row['norm_relative'] > .02 for row in selected))
+        check('selected_exact_formulas', all(abs(row['cost']-(row['replace_relative']/.1+row['residual_relative']/.1+row['direct_ratio']/.5)) < 1e-12 for row in selected))
+        missing, incomplete = matching_case('matching_missing_phase', remove_phase=True)
+        check('missing_phase_inconclusive', missing is None and incomplete['status'] == 'MATCHING_INCONCLUSIVE')
+        check('missing_phase_only_camera1', incomplete['failed_cameras'] == ['1'])
+        check('missing_phase_exact16_sentinels', incomplete['camera_assignment_summary']['1']['sentinel_selections'] == 16)
+        direct, direct_audit = matching_case('matching_direct_failure', direct_failure=True)
+        check('direct_gate_blocks_all', direct is None and direct_audit['gate_counts'].get('direct', 0) == 0)
+        check('direct_failure_all_cameras', direct_audit['failed_cameras'] == ['1', '2', '3', '4', '5'])
+        # Run actual production group-masked coverage with NumPy fake tensors;
+        # exactly 875 toy views /175 groups verifies image->group->group mean.
+        probe_pool = []
+        bank0 = np.asarray([[float(group), 0.] for group in range(175)], dtype=np.float64)
+        origins = {method: [{'group_key': f'g{group:03d}'} for group in range(175)] for method in r.METHODS}
+        for group in range(175):
+            for camera in range(1, 6):
+                row = {'category': 'toy', 'path': f'toy/g{group:03d}/c{camera}', 'group_key': f'g{group:03d}',
+                       'camera': str(camera), 'research_role': 'source_fit'}
+                probe_pool.append({'row': row, 'probe_features': np.asarray([[group, camera*.1+j*.001] for j in range(64)], dtype=np.float64)})
+        def coverage_case(name, target_shift, sham_shift):
+            r.OUT = artifacts/name
+            r.OUT.mkdir()
+            arrays = {'base': bank0, 'target': bank0+np.asarray([target_shift, 0.]), 'sham': bank0+np.asarray([sham_shift, 0.])}
+            return r.fit_coverage(np, FakeTorch, probe_pool, {key: FakeTensor(value) for key, value in arrays.items()}, origins, lambda: None)
+        passed, coverage = coverage_case('coverage_identical', 0., 0.)
+        check('identical_coverage_pass', passed)
+        manual = {}
+        for stat in ('mean', 'p95', 'p99'):
+            per_camera = []
+            for camera in range(1, 6):
+                expected = 1+(camera*.1+np.arange(64)*.001)**2
+                per_camera.append(float(expected.mean()) if stat == 'mean' else float(np.quantile(expected, .95 if stat == 'p95' else .99)))
+            manual[stat] = float(np.mean(per_camera))
+            check('masked_group_coverage_'+stat, abs(coverage['summary']['base'][stat]-manual[stat]) < 1e-9)
+        check('mask_removes_self_match', coverage['summary']['base']['mean'] > 1.)
+        check('coverage_has175groups875views', coverage['groups'] == 175 and coverage['views'] == 875)
+        failed, mismatch = coverage_case('coverage_mismatch', .2, 0.)
+        check('coverage_residual_failure', not failed and mismatch['status'] == 'MATCHING_INCONCLUSIVE')
+        check('coverage_residual_gate_is_binding', not mismatch['residuals']['mean']['pass'])
+        equal_worse, worse = coverage_case('coverage_identically_worse', 1000., 1000.)
+        check('matching_does_not_require_improvement', equal_worse and worse['changes_relative_to_base_descriptive']['mean']['target'] > 0)
+        # Admission is metadata/checksum-only. It does not start either worker.
+        r.OUT = real_out
+        if (OUT/'preflight.json').exists() and (OUT/'plan.json').exists():
+            r.check_admission()
+            check('frozen_metadata_admission', True)
+            admission = 'CHECKED_METADATA_ONLY'
+        else:
+            admission = 'NOT_YET_FROZEN_NOT_EXECUTED'
+        check('torch_not_imported', 'torch' not in sys.modules)
+        result = {'status': 'PASS_CPU_TOY_ONLY', 'checks': checks, 'passed': len(checks), 'failed': 0,
+                  'producer_sha256': r.p.sha(OUT/'run_p2.py'), 'selftest_sha256': r.p.sha(Path(__file__)),
+                  'metadata_admission': admission, 'wall_seconds': time.perf_counter()-start,
+                  'research_pixels_read': 0, 'confirmation_pixels_or_scores_read': 0, 'credentials_read': False,
+                  'network_requests': 0, 'cuda_initialization': 0,
+                  'uses': 'Production probe, matching, assignment and masked-coverage code; only distance primitive/tensors replaced by CPU NumPy on toy values.',
+                  'limits': 'Does not test DINO, FP32 GPU distances, transport, real matching feasibility or scientific predictions.'}
+        with (OUT/'producer_selftest.json').open('x', encoding='utf8') as stream:
+            json.dump(result, stream, indent=2, allow_nan=False)
+        print(json.dumps({key: result[key] for key in ('status', 'passed', 'failed', 'wall_seconds', 'metadata_admission', 'producer_sha256')}))
+    finally:
+        r.OUT = real_out
+        r.top_two = original_top_two
+
+
+if __name__ == '__main__':
+    main()

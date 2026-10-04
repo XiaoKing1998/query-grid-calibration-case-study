@@ -1,0 +1,528 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Independent CPU audit of P2 identities, exported geometric scalars and matching.
+
+No producer/analyzer imports, torch, data fetching or model execution. The audit
+does not claim to recompute vector distances from features that were not saved.
+The driver is completed against the producer schema before authorized execution.
+"""
+from pathlib import Path
+from collections import Counter, defaultdict
+import csv
+import ctypes
+import hashlib
+import json
+import math
+import sys
+import time
+import datetime
+import traceback
+
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+
+OUT = Path(__file__).resolve().parent
+P1 = OUT.parent/'p1'
+PHASES = ('00', '01', '10')
+CHECKS = []
+INPUT_SHA = {}
+MAX_ERROR = 0.0
+
+
+def sha(path):
+    value = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for block in iter(lambda: stream.read(8*1024*1024), b''):
+            value.update(block)
+    return value.hexdigest()
+
+
+def read(path):
+    INPUT_SHA[str(path)] = sha(path)
+    return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+
+
+def rows(path):
+    INPUT_SHA[str(path)] = sha(path)
+    with Path(path).open(encoding='utf-8-sig', newline='') as stream:
+        return list(csv.DictReader(stream))
+
+
+def check(name, ok):
+    CHECKS.append(name)
+    if not bool(ok):
+        raise AssertionError(name)
+
+
+def numeric(name, actual, expected, tolerance=2e-10):
+    global MAX_ERROR
+    a, b = np.asarray(actual, dtype=float), np.asarray(expected, dtype=float)
+    check(name+':shape', a.shape == b.shape)
+    check(name+':finite', np.isfinite(a).all() and np.isfinite(b).all())
+    error = float(np.abs(a-b).max()) if a.size else 0.0
+    MAX_ERROR = max(MAX_ERROR, error)
+    check(name, np.allclose(a,b,rtol=0,atol=tolerance))
+
+
+def ratio_values(pair):
+    values = {name: float(pair[name]) for name in ('t_norm2','c_norm2','t_b2','c_b2','t_c2','t_residual2','c_residual2')}
+    if not all(math.isfinite(value) and value >= 0 for value in values.values()):
+        return None
+    replace_mean = (values['t_b2']+values['c_b2'])/2
+    residual_mean = (values['t_residual2']+values['c_residual2'])/2
+    direct_mean = (math.sqrt(values['t_b2'])+math.sqrt(values['c_b2']))/2
+    if min(replace_mean,residual_mean,direct_mean) <= 0:
+        return None
+    replace = abs(values['t_b2']-values['c_b2'])/replace_mean
+    residual = abs(values['t_residual2']-values['c_residual2'])/residual_mean
+    direct = math.sqrt(values['t_c2'])/direct_mean
+    norm_mean = (values['t_norm2']+values['c_norm2'])/2
+    return {'replace_relative':replace, 'residual_relative':residual, 'direct_ratio':direct,
+            'norm_relative':abs(values['t_norm2']-values['c_norm2'])/norm_mean if norm_mean > 0 else None,
+            'cost':replace/.10+residual/.10+direct/.5,
+            'legal':replace <= .10 and residual <= .10 and direct <= .5}
+
+
+def audit_pair(pair, candidates, anchor_by_id, require_legal=False):
+    """Recompute formulas and membership, not the unsaved feature distances."""
+    anchor = anchor_by_id[int(pair['anchor_id'])]
+    path = pair['path']; saved = candidates[path]
+    name = path+':'+str(pair['anchor_id'])+':'+pair['target_phase']+':'+str(pair['sham_cell'])
+    check('pair_source:'+name, path == anchor['path'] and pair['group_key'] == saved['group_key'] == anchor['group_key'] and str(pair['camera']) == str(saved['camera']) == str(anchor['camera']))
+    check('pair_fit_role:'+name,pair['research_role'] == saved['research_role'] == 'source_fit' and pair['category'] == saved['category'])
+    r,c = int(anchor['row']),int(anchor['col'])
+    check('eligible_anchor:'+name, r%2 == c%2 == 1 and 3 <= r <= 61 and 3 <= c <= 61)
+    check('anchor_coordinates:'+name, int(pair['anchor_row']) == r and int(pair['anchor_col']) == c)
+    phase = pair['target_phase']; check('target_phase:'+name,phase in PHASES)
+    target = 64*(r-1+int(phase[0]))+c-1+int(phase[1])
+    check('target_identity:'+name,int(pair['target_cell']) == target)
+    check('target_coordinate_export:'+name,64*int(pair['target_row'])+int(pair['target_col']) == target)
+    sham = int(pair['sham_cell']); sr,sc = divmod(sham,64)
+    check('sham_coordinate_export:'+name,int(pair['sham_row']) == sr and int(pair['sham_col']) == sc)
+    check('sham_membership:'+name,sham in saved['odd'] and 1 <= sr <= 62 and 1 <= sc <= 62 and sr%2 == sc%2 == 1)
+    check('sham_new_identity:'+name,sham not in saved['b0_cells'])
+    ratios = ratio_values(pair)
+    check('pair_positive_denominators:'+name, ratios is not None)
+    for key,value in ratios.items():
+        if key == 'legal':continue
+        if value is not None:numeric('pair_formula:'+name+':'+key,pair[key],value)
+    check('pair_legal_flag:'+name,str(pair['all_hard_gates']).lower() == str(ratios['legal']).lower())
+    if require_legal:check('pair_three_gates:'+name,ratios['legal'])
+    return ratios
+
+
+def identity_inputs():
+    """Recover source-only candidate identities and frozen ordered odd_s0 bank."""
+    source = read(P1/'candidate_identities.json')
+    banks = rows(P1/'bank_identities.csv')
+    frozen = read(P1/'prediction_freeze.json')
+    prior_audit=read(P1/'independent_verification.json')
+    for filename in ('candidate_identities.json','bank_identities.csv'):
+        check('p1_identity_hash:'+filename,sha(P1/filename) == prior_audit['input_sha256'][str(P1/filename)])
+    check('p1_bank_freeze',sha(P1/'bank_identities.csv') == frozen['sha256_files']['bank_identities.csv'])
+    candidates = {}
+    for saved in source['identities']:
+        path = saved['path']
+        check('fit_identity_unique:'+path,path not in candidates and saved['research_role'] == 'source_fit')
+        seed = int.from_bytes(hashlib.sha256(('bank256:'+path).encode()).digest()[:8],'little')
+        coarse = np.random.Generator(np.random.PCG64(seed)).choice(1024,size=256,replace=False)
+        rr,cc = np.divmod(coarse,32)
+        odd = 64*(2*rr+1)+2*cc+1
+        check('odd_candidate_identity:'+path,np.array_equal(saved['odd'],odd))
+        candidates[path] = dict(saved,b0_cells=set())
+    check('fit_source_count',len(candidates) == 875)
+    groups=defaultdict(list)
+    for row in candidates.values():groups[row['group_key']].append(row)
+    check('fit_group_count',len(groups) == 175)
+    for key,rr in groups.items():
+        check('fit_five_cameras:'+key,len(rr) == 5 and {str(r['camera']) for r in rr} == set('12345'))
+    selected=[r for r in banks if r['method'] == 'odd_s0']
+    check('b0_size_and_order',len(selected) == 4096 and [int(r['prototype']) for r in selected] == list(range(4096)))
+    anchor_by_id={int(row['prototype']):row for row in selected}
+    for row in selected:
+        path=row['path'];cell=64*int(row['row'])+int(row['col']);source=candidates[path]
+        check('b0_source:'+row['prototype'],row['group_key'] == source['group_key'] and str(row['camera']) == str(source['camera']))
+        check('b0_candidate:'+row['prototype'],cell in source['odd'] and cell not in source['b0_cells'])
+        source['b0_cells'].add(cell)
+    return candidates,anchor_by_id
+
+
+def peak_rss():
+    class Mem(ctypes.Structure):
+        _fields_ = [('cb',ctypes.c_ulong),('PageFaultCount',ctypes.c_ulong),
+                    ('PeakWorkingSetSize',ctypes.c_size_t),('WorkingSetSize',ctypes.c_size_t),
+                    ('QuotaPeakPagedPoolUsage',ctypes.c_size_t),('QuotaPagedPoolUsage',ctypes.c_size_t),
+                    ('QuotaPeakNonPagedPoolUsage',ctypes.c_size_t),('QuotaNonPagedPoolUsage',ctypes.c_size_t),
+                    ('PagefileUsage',ctypes.c_size_t),('PeakPagefileUsage',ctypes.c_size_t)]
+    kernel=ctypes.WinDLL('kernel32');kernel.GetCurrentProcess.restype=ctypes.c_void_p
+    psapi=ctypes.WinDLL('psapi');psapi.GetProcessMemoryInfo.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_ulong]
+    value=Mem();value.cb=ctypes.sizeof(value)
+    if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(),ctypes.byref(value),value.cb):
+        raise OSError('GetProcessMemoryInfo')
+    return int(value.PeakWorkingSetSize)
+
+
+def solve_exported_graph(costs, sentinel=1000.0):
+    """Full linear assignment; transposed relative to source-major producer."""
+    matrix=np.asarray(costs,dtype=float)
+    check('assignment_matrix_shape',matrix.ndim == 2 and matrix.shape[1] == 48)
+    check('assignment_cost_finite',np.isfinite(matrix).all())
+    # Slots are rows here. A full solution must assign all48 slots to distinct sources.
+    slot,source=linear_sum_assignment(matrix.T)
+    legal=(matrix[source,slot] < sentinel)
+    feasible=len(slot) == 48 and bool(legal.all())
+    return {'feasible':feasible,'assigned_slots':len(slot),'legal_slots':int(legal.sum()),
+            'sentinel_slots':int((~legal).sum()),'total_cost':float(matrix[source,slot].sum()),
+            'pairs':[(int(i),int(j)) for i,j in zip(source,slot)]}
+
+
+def phase_hall_certificate(costs,sentinel=1000.0):
+    """Exact capacity test for three phase types, each repeated sixteen times.
+
+    Because all sixteen slots of a phase have identical neighbors, Hall's
+    condition reduces to seven nonempty subsets of the three phase types.
+    This independently checks feasibility without depending on LSA behavior.
+    """
+    matrix=np.asarray(costs,dtype=float)
+    check('hall_matrix_shape',matrix.ndim == 2 and matrix.shape[1] == 48)
+    for index,phase in enumerate(PHASES):
+        block=matrix[:,16*index:16*(index+1)]
+        check('hall_identical_phase_slots:'+phase,np.array_equal(block,np.repeat(block[:,:1],16,axis=1)))
+    adjacency=matrix[:,[0,16,32]] < sentinel
+    subsets=[]
+    for mask in range(1,8):
+        indexes=[i for i in range(3) if mask&(1<<i)]
+        union=int(np.any(adjacency[:,indexes],axis=1).sum())
+        required=16*len(indexes)
+        subsets.append({'phases':[PHASES[i] for i in indexes],'distinct_source_neighbors':union,
+                        'required_sources':required,'slack':union-required,'passes':union>=required})
+    return {'feasible':all(row['passes'] for row in subsets),'subsets':subsets}
+
+
+def source_order(path):
+    return hashlib.sha256(('p2-source-order-v1:'+path).encode()).hexdigest(),path
+
+
+def pair_order(row):
+    return float(row['cost']),int(row['anchor_id']),int(row['sham_cell'])
+
+
+def audit_probes(candidates):
+    probes=read(OUT/'fit_probe_identities.json')
+    check('probe_count',len(probes['rows']) == 875)
+    check('probe_source_order',[row['path'] for row in probes['rows']] == list(candidates))
+    for row in probes['rows']:
+        path=row['path'];source=candidates[path]
+        check('probe_identity:'+path,all(row[key] == source[key] for key in ('category','path','group_key','camera','research_role')))
+        excluded=set()
+        for cell in source['odd']:
+            r,c=divmod(int(cell),64);r-=r%2;c-=c%2
+            excluded.update(64*(r+a)+c+b for a in (0,1) for b in (0,1))
+        check('probe_excluded_count:'+path,len(excluded) == 1024)
+        seed=int.from_bytes(hashlib.sha256(('p2-fit-probe-v1:'+path).encode()).digest()[:8],'little')
+        rng=np.random.Generator(np.random.PCG64(seed));expected=[]
+        for phase in ('00','01','10','11'):
+            legal=[cell for cell in range(4096) if cell not in excluded and cell//64%2 == int(phase[0]) and cell%2 == int(phase[1])]
+            check('probe_available:'+path+':'+phase,len(legal) == 768)
+            expected.extend(rng.choice(legal,size=16,replace=False).tolist())
+        check('probe_exact_order:'+path,row['probe_cells'] == expected and len(set(expected)) == 64)
+
+
+def optional_rows(name):
+    return rows(OUT/name) if (OUT/name).exists() else []
+
+
+def audit_matching(candidates,anchors):
+    audit=read(OUT/'matching_audit.json')
+    summaries=rows(OUT/'best_candidate_by_anchor_phase.csv')
+    finite_rows=optional_rows('best_finite_pair_by_anchor_phase.csv')
+    legal_rows=optional_rows('best_legal_pair_by_anchor_phase.csv')
+    best_rows=optional_rows('best_pair_by_source_phase.csv')
+    expected={(aid,phase) for aid,a in anchors.items() if 3 <= int(a['row']) <= 61 and 3 <= int(a['col']) <= 61 for phase in PHASES}
+    index={(int(row['anchor_id']),row['target_phase']):row for row in summaries}
+    check('all_eligible_anchor_phases',set(index) == expected and len(index) == len(summaries))
+    check('eligible_anchor_counts',audit['eligible_anchor_phase_count'] == len(expected) and audit['eligible_anchor_count'] == len({key[0] for key in expected}))
+    count_fields={'candidate_pairs_total':'candidate_pairs_total','positive_finite':'positive_finite',
+                  'replace':'replace_pass','residual':'residual_pass','direct':'direct_pass','all_hard_gates':'all_hard_gates',
+                  'replace_and_residual':'replace_and_residual','norm_2percent_descriptive_only':'norm_2percent_descriptive_only'}
+    for key,row in index.items():
+        a=anchors[key[0]];source=candidates[a['path']]
+        check('anchor_summary_identity:'+str(key),all(row[field] == source[field] for field in ('category','path','group_key','camera','research_role')))
+        available=[cell for cell in source['odd'] if cell not in source['b0_cells'] and 1 <= cell//64 <= 62 and 1 <= cell%64 <= 62]
+        counts={name:int(row[field]) for name,field in count_fields.items()}
+        check('sham_candidate_count:'+str(key),counts['candidate_pairs_total'] == len(available))
+        check('gate_counts_bounds:'+str(key),0 <= counts['positive_finite'] <= len(available) and all(0 <= counts[name] <= counts['positive_finite'] for name in ('replace','residual','direct')) and 0 <= counts['all_hard_gates'] <= min(counts[name] for name in ('replace','residual','direct')))
+        check('gate_joint_count_bounds:'+str(key),counts['all_hard_gates'] <= counts['replace_and_residual'] <= min(counts['replace'],counts['residual']) and 0 <= counts['norm_2percent_descriptive_only'] <= counts['positive_finite'])
+        if counts['direct']:
+            check('minimum_direct_implication:'+str(key),float(row['minimum_direct_ratio']) <= .5)
+    for name,field in count_fields.items():
+        check('gate_count_sum:'+name,int(audit['gate_counts'][name]) == sum(int(row[field]) for row in summaries))
+    minima=[float(row['minimum_direct_ratio']) for row in summaries if row['minimum_direct_ratio'] not in ('',None)]
+    if minima:numeric('minimum_direct_global',audit['minimum_direct_ratio'],min(minima))
+    finite_index={(int(row['anchor_id']),row['target_phase']):row for row in finite_rows}
+    check('best_finite_complete',len(finite_index) == len(finite_rows) and set(finite_index) == {key for key,row in index.items() if int(row['positive_finite']) > 0})
+    for key,row in finite_index.items():
+        value=audit_pair(row,candidates,anchors)
+        numeric('best_finite_cost:'+str(key),index[key]['best_finite_cost'],value['cost'])
+        check('best_finite_direct_lower_bound:'+str(key),float(index[key]['minimum_direct_ratio']) <= value['direct_ratio']+2e-10)
+        if value['legal']:check('best_finite_legal_count:'+str(key),int(index[key]['all_hard_gates']) > 0)
+    legal_index={(int(row['anchor_id']),row['target_phase']):row for row in legal_rows}
+    check('one_best_legal_per_anchor',len(legal_index) == len(legal_rows))
+    check('legal_anchor_row_count',audit['best_legal_anchor_phase_rows'] == len(legal_rows))
+    check('legal_anchor_completeness',set(legal_index) == {key for key,row in index.items() if int(row['all_hard_gates']) > 0})
+    for key,row in legal_index.items():
+        audit_pair(row,candidates,anchors,require_legal=True)
+        check('best_finite_lower_bound:'+str(key),float(index[key]['best_finite_cost']) <= float(row['cost'])+2e-10)
+    independent_best={}
+    for row in legal_rows:
+        key=row['path'],row['target_phase']
+        if key not in independent_best or pair_order(row)<pair_order(independent_best[key]):independent_best[key]=row
+    best_index={(row['path'],row['target_phase']):row for row in best_rows}
+    check('source_phase_complete',set(best_index) == set(independent_best) and len(best_index) == len(best_rows))
+    check('source_phase_count',audit['best_source_phase_rows'] == len(best_rows))
+    for key,row in best_index.items():
+        expected_row=independent_best[key]
+        check('source_phase_best_legal:'+str(key),row == expected_row)
+    problems=read(OUT/'assignment_problem.json')
+    check('assignment_input_hash',audit['assignment_problem_sha256'] == sha(OUT/'assignment_problem.json'))
+    check('assignment_constants',problems['sentinel'] == 1000 and problems['legal_cost_max'] == 3 and problems['full_legal_camera_assignment_cost_max'] == 144)
+    check('assignment_camera_keys',set(problems['cameras']) == set('12345'))
+    phases=[phase for phase in PHASES for _ in range(16)]
+    check('assignment_phase_slots',problems['slot_phases'] == phases)
+    certificates={};failed=[];selected_expected=[]
+    for camera,problem in problems['cameras'].items():
+        sources=sorted([path for path,row in candidates.items() if str(row['camera']) == camera],key=source_order)
+        check('assignment_source_order:'+camera,problem['row_source_paths'] == sources and len(sources) == 175)
+        check('assignment_columns:'+camera,problem['column_target_phases'] == phases)
+        matrix=np.full((175,48),1000.)
+        for i,path in enumerate(sources):
+            for j,phase in enumerate(phases):
+                if (path,phase) in best_index:matrix[i,j]=float(best_index[path,phase]['cost'])
+        numeric('assignment_full_matrix:'+camera,problem['costs'],matrix)
+        check('assignment_legal_cost_bounds:'+camera,np.all((matrix == 1000)|((matrix >= 0)&(matrix <= 3))))
+        answer=solve_exported_graph(matrix);hall=phase_hall_certificate(matrix)
+        check('assignment_hall_agreement:'+camera,answer['feasible'] == hall['feasible'] == problem['all_slots_legal'])
+        check('assignment_edge_count:'+camera,problem['legal_image_phase_edges'] == int(np.sum(matrix[:,[0,16,32]] < 1000)))
+        ar=np.asarray(problem['assignment_rows'],int);ac=np.asarray(problem['assignment_columns'],int)
+        check('assignment_saved_capacity:'+camera,len(ar) == len(ac) == 48 and len(set(ar)) == len(set(ac)) == 48 and np.all((ar>=0)&(ar<175)) and set(ac) == set(range(48)))
+        numeric('assignment_saved_total:'+camera,problem['assignment_total_cost'],matrix[ar,ac].sum())
+        numeric('assignment_optimal_total:'+camera,problem['assignment_total_cost'],answer['total_cost'],tolerance=2e-8)
+        check('assignment_sentinel_count:'+camera,problem['sentinel_selections'] == answer['sentinel_slots'])
+        check('assignment_summary:'+camera,audit['camera_assignment_summary'][camera] == {field:problem[field] for field in ('all_slots_legal','assignment_total_cost','sentinel_selections','legal_image_phase_edges')})
+        if not answer['feasible']:failed.append(camera)
+        else:
+            for i,j in zip(ar,ac):selected_expected.append({**best_index[sources[i],phases[j]],'assignment_column':str(j)})
+        certificates[camera]={'hall':hall,'independent_assignment':answer,'legal_image_phase_edges':problem['legal_image_phase_edges']}
+    check('matching_failure_cameras',audit['failed_cameras'] == failed)
+    check('matching_assignment_flag',audit['assignment_passed'] == (not failed))
+    check('matching_status',audit['status'] == ('MATCHING_INCONCLUSIVE' if failed else 'MATCHING_PASS'))
+    check('matching_quantity',audit['K'] == 240 and audit['selected_pairs_from_successful_cameras'] == len(selected_expected))
+    check('matching_scope',audit['norm_2percent_is_hard_gate'] is False and audit['query_pixels_requested'] == 0)
+    selected=optional_rows('selected_pairs.csv')
+    if failed:check('no_partial_intervention',not selected and not (OUT/'bank_identities.csv').exists())
+    else:
+        check('selected_exact_saved_assignment',selected == selected_expected)
+        check('selected_unique_sources_anchors',len(selected) == len({r['path'] for r in selected}) == len({r['anchor_id'] for r in selected}) == 240)
+        for camera in '12345':
+            for phase in PHASES:check('selected_quota:'+camera+phase,sum(r['camera'] == camera and r['target_phase'] == phase for r in selected) == 16)
+    return {'pass':not failed,'gate_counts':audit['gate_counts'],'failed_cameras':failed,'certificates':certificates,'legal_best_anchor_rows':len(legal_rows),'legal_best_source_phase_rows':len(best_rows)},selected
+
+
+def audit_banks(selected,candidates,anchors):
+    saved=rows(OUT/'bank_identities.csv')
+    check('intervention_bank_count',len(saved) == 3*4096)
+    pairs={int(row['anchor_id']):row for row in selected}
+    result={}
+    for method in ('base','target','sham'):
+        chosen=[row for row in saved if row['method'] == method]
+        check('intervention_order:'+method,[int(row['prototype']) for row in chosen] == list(range(4096)))
+        for i,row in enumerate(chosen):
+            base=anchors[i]
+            check('intervention_source:'+method+':'+str(i),all(row[key] == base[key] for key in ('path','group_key','camera')))
+            cell=64*int(row['row'])+int(row['col'])
+            expected_cell=int(pairs[i][method+'_cell']) if method != 'base' and i in pairs else 64*int(base['row'])+int(base['col'])
+            check('intervention_replacement:'+method+':'+str(i),cell == expected_cell)
+        check('intervention_unique:'+method,len({(row['path'],row['row'],row['col']) for row in chosen}) == 4096)
+        result[method]=chosen
+    return result
+
+
+def audit_fit_coverage(candidates,banks):
+    views=rows(OUT/'fit_coverage_views.csv');saved_groups=rows(OUT/'fit_coverage_groups.csv');audit=read(OUT/'fit_coverage_audit.json')
+    check('coverage_views_total',len(views) == 875*3 and len({(r['method'],r['path']) for r in views}) == 875*3)
+    groups=defaultdict(list);cameras=defaultdict(list)
+    for row in views:
+        method=row['method'];source=candidates[row['path']]
+        check('coverage_identity:'+method+row['path'],all(row[key] == source[key] for key in ('category','path','group_key','camera','research_role')))
+        check('coverage_probe_count:'+method+row['path'],int(row['probe_count']) == 64)
+        banned=sum(r['group_key'] == source['group_key'] for r in banks[method])
+        check('coverage_group_exclusion:'+method+row['path'],int(row['excluded_prototypes']) == banned and 0 < banned < 4096)
+        check('coverage_view_finite:'+method+row['path'],all(math.isfinite(float(row[key])) and float(row[key]) >= 0 for key in ('mean','p95','p99')) and float(row['p95']) <= float(row['p99']))
+        groups[method,row['group_key']].append(row);cameras[method,row['camera']].append(row)
+    aggregate={key:{metric:float(np.mean([float(r[metric]) for r in rr])) for metric in ('mean','p95','p99')} for key,rr in groups.items()}
+    check('coverage_group_total',len(aggregate) == len(saved_groups) == 3*175)
+    check('coverage_group_export_unique',len({(r['method'],r['group_key']) for r in saved_groups}) == len(saved_groups))
+    for row in saved_groups:
+        key=row['method'],row['group_key'];rr=groups[key]
+        check('coverage_group_five_views:'+str(key),len(rr) == int(row['views']) == 5 and {r['camera'] for r in rr} == set('12345'))
+        for metric in ('mean','p95','p99'):numeric('coverage_group_value:'+str(key)+metric,row[metric],aggregate[key][metric])
+    summary={method:{metric:float(np.mean([value[metric] for (m,g),value in aggregate.items() if m == method])) for metric in ('mean','p95','p99')} for method in ('base','target','sham')}
+    for method in summary:
+        for metric in summary[method]:numeric('coverage_global:'+method+metric,audit['summary'][method][metric],summary[method][metric])
+    gates={}
+    for metric,tol in [('mean',.005),('p95',.01),('p99',.01)]:
+        residual=abs(summary['target'][metric]-summary['sham'][metric])/summary['base'][metric]
+        numeric('coverage_residual:'+metric,audit['residuals'][metric]['absolute_difference_relative_to_base'],residual)
+        check('coverage_gate:'+metric,audit['residuals'][metric]['tolerance'] == tol and audit['residuals'][metric]['pass'] == (residual <= tol))
+        gates[metric]=residual <= tol
+        for method in ('target','sham'):numeric('coverage_change_descriptive:'+method+metric,audit['changes_relative_to_base_descriptive'][metric][method],summary[method][metric]/summary['base'][metric]-1)
+    check('coverage_decision',audit['status'] == ('FIT_COVERAGE_MATCH_PASS' if all(gates.values()) else 'MATCHING_INCONCLUSIVE'))
+    check('coverage_scope',audit['improvement_is_required'] is False and audit['source_group_exclusion'] is True and audit['query_pixels_requested'] == 0)
+    group_residuals={g:{metric:(aggregate['target',g][metric]-aggregate['sham',g][metric])/aggregate['base',g][metric] for metric in ('mean','p95','p99')} for m,g in aggregate if m == 'base'}
+    camera_summary={method:{camera:{metric:float(np.mean([float(r[metric]) for r in cameras[method,camera]])) for metric in ('mean','p95','p99')} for camera in '12345'} for method in ('base','target','sham')}
+    return {'pass':all(gates.values()),'gates':gates,'summary':summary,'camera_summary':camera_summary,'group_residuals':group_residuals}
+
+
+def self_test():
+    """Synthetic numerical checks only; no project inputs or producer import."""
+    start=time.perf_counter()
+    pair=dict(t_norm2=1.,c_norm2=100.,t_b2=100.,c_b2=100.,t_c2=4.,t_residual2=50.,c_residual2=50.)
+    value=ratio_values(pair)
+    check('synthetic_legal',value['legal'])
+    numeric('synthetic_direct',value['direct_ratio'],.2)
+    numeric('synthetic_cost',value['cost'],.4)
+    check('synthetic_norm_descriptive',value['norm_relative'] > .02 and value['legal'])
+    for field,replacement in [('t_b2',200.),('t_residual2',100.),('t_c2',26.)]:
+        changed=dict(pair,**{field:replacement})
+        check('synthetic_reject:'+field,not ratio_values(changed)['legal'])
+    check('synthetic_zero_denominator',ratio_values(dict(pair,t_b2=0.,c_b2=0.)) is None)
+    check('synthetic_nonfinite',ratio_values(dict(pair,t_c2=float('nan'))) is None)
+    check('synthetic_negative',ratio_values(dict(pair,t_c2=-1.)) is None)
+    matrix=np.full((48,48),1000.)
+    matrix[0,:16]=1.;matrix[0,16:32]=0.
+    matrix[1:16,:16]=1.;matrix[16:32,16:32]=1.;matrix[32:,32:]=1.
+    answer=solve_exported_graph(matrix)
+    check('synthetic_greedy_trap_full_assignment',answer['feasible'] and answer['legal_slots'] == 48)
+    numeric('synthetic_exact_total',answer['total_cost'],48.)
+    check('synthetic_source_capacity',len({i for i,j in answer['pairs']}) == 48)
+    check('synthetic_hall_feasible',phase_hall_certificate(matrix)['feasible'])
+    matrix[1,:16]=1000.
+    answer=solve_exported_graph(matrix)
+    check('synthetic_infeasible_quota',not answer['feasible'] and answer['sentinel_slots'] == 1)
+    certificate=phase_hall_certificate(matrix)
+    check('synthetic_hall_infeasible',not certificate['feasible'])
+    check('synthetic_hall_witness',certificate['subsets'][0]['distinct_source_neighbors'] == 15)
+    check('synthetic_no_research_inputs',not INPUT_SHA)
+    result={'status':'PASS_SYNTHETIC_CPU_SELFTEST','checks':len(CHECKS),
+            'research_inputs_opened':0,'new_pixels':0,'gpu':0,'network':0,'confirmation_access':0,
+            'wall_seconds':time.perf_counter()-start,'verifier_sha256':sha(Path(__file__))}
+    destination=OUT/'independent_selftest.json'
+    if destination.exists():
+        destination=OUT/('independent_selftest_'+datetime.datetime.now().strftime('%Y%m%dT%H%M%S')+'.json')
+    destination.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
+    print(json.dumps(result))
+
+
+def main():
+    start=time.perf_counter();cpu=time.process_time()
+    check('no_success_overwrite',not (OUT/'independent_verification.json').exists())
+    result={'status':'FAILED_INDEPENDENT_CPU_VERIFICATION','scope':'P2 fit identities, exported scalar geometry, exact assignment, coverage aggregation and resources'}
+    try:
+        plan=read(OUT/'plan.json');pre=read(OUT/'preflight.json')
+        check('frozen_plan',plan['status'] == 'FROZEN_BEFORE_P2_FIT_PIXELS')
+        check('frozen_design',plan['methods'] == ['base','target','sham'] and plan['replacement_count'] == 240 and plan['phase_quota_per_camera'] == 16)
+        check('frozen_pair_gates',plan['pair_tolerances'] == {'replace':.1,'residual':.1,'direct':.5})
+        check('frozen_coverage_gates',plan['fit_coverage_tolerances'] == {'mean':.005,'p95':.01,'p99':.01})
+        check('frozen_roles',plan['input_roles'] == {'source_fit':875,'source_calibration':380,'development':755})
+        check('preflight_admission',pre['status'] == 'PASS_METADATA_AND_LOCAL_DEPENDENCY_ADMISSION' and pre['p1_gate_pass'] is True and pre['resource_projection_pass'] is True)
+        check('plan_hash',pre['plan_sha256'] == sha(OUT/'plan.json'))
+        check('producer_hash',pre['producer_sha256'] == sha(OUT/'run_p2.py'))
+        for filename,expected in {**pre['dependency_hashes'],**pre['checkpoint_hashes']}.items():
+            check('dependency_hash:'+filename,sha(filename) == expected)
+        check('plan_scope',plan['confirmation_pixels_and_scores'] == plan['masks_requested'] == 0)
+        prior=read(P1/'prediction_freeze.json');receipt=read(OUT/'resource_receipt.json')
+        for filename,expected in receipt['sha256_files'].items():
+            check('fit_output_receipt_hash:'+filename,sha(OUT/filename) == expected)
+        supervisor=read(OUT/'supervisor.json')
+        check('supervisor_success',supervisor['exit_code'] == 0 and supervisor['timeout'] is False)
+        numeric('resource_prior_gpu',receipt['prior_p1_gpu_wall_seconds'],prior['total_p1_gpu_wall_seconds'])
+        numeric('resource_gpu_segments',receipt['gpu_wall_seconds'],sum(segment['compute_wall_seconds'] for segment in receipt['segments']))
+        numeric('resource_gpu_shared_sum',receipt['total_p1_p2_gpu_wall_seconds'],prior['total_p1_gpu_wall_seconds']+receipt['gpu_wall_seconds'])
+        p1_monitors=[read(P1/filename) for filename in ('probe_execution_monitor.json','inference_execution_monitor.json')]
+        prior_wall=sum(monitor['wall_seconds'] for monitor in p1_monitors)
+        numeric('resource_prior_wall',receipt['prior_p1_execution_wall_seconds'],prior_wall)
+        numeric('resource_worker_wall_sum',receipt['total_p1_p2_worker_execution_wall_seconds'],prior_wall+receipt['worker_wall_seconds'])
+        check('resource_caps',receipt['total_p1_p2_gpu_wall_seconds'] <= 1800 and receipt['total_p1_p2_worker_execution_wall_seconds'] <= 5400 and receipt['p1_p2_persisted_bytes_before_receipt'] < 100*1024**2)
+        check('resource_scope',receipt['confirmation_access'] == 0 and receipt['historical_budget_refunded'] is False and receipt['fit_images_decoded'] == 875)
+        for i,memory in enumerate(receipt['host_memory']):
+            for field in ('native_process_peak_rss_bytes','sampled_worker_peak_rss_bytes','sampled_class_peak_rss_bytes'):
+                if field in memory and memory[field] is not None:check('resource_rss:'+str(i)+field,memory[field] <= 40*1024**3)
+        monitor=read(OUT/'execution_monitor.json')
+        check('watchdog_finished',monitor['status'] == 'FINISHED' and monitor['parent_exit_code'] == 0 and monitor['stop_reason'] is None)
+        check('watchdog_rss',monitor['sampled_peak_tree_rss_bytes'] <= 40*1024**3)
+        check('watchdog_shared_wall',prior_wall+monitor['wall_seconds'] <= 5400)
+        candidates,anchors=identity_inputs()
+        reconstruction=read(OUT/'base_reconstruction.json')
+        check('base_reconstruction_receipt',reconstruction['status'] == 'EXACT_SOURCE_FIT_BANK_RECONSTRUCTION' and reconstruction['prototype_count'] == 4096 and reconstruction['query_pixels_requested'] == 0)
+        check('base_reconstruction_hash',reconstruction['base_bank_sha256'] == reconstruction['upstream_B_bank_sha256'] == reconstruction['upstream_P1_bank_sha256'] == prior['bank_hashes']['odd_s0'])
+        check('base_reconstruction_source_counts',reconstruction['source_group_count'] == len({row['group_key'] for row in anchors.values()}) and reconstruction['source_image_count'] == len({row['path'] for row in anchors.values()}))
+        audit_probes(candidates)
+        matching,selected=audit_matching(candidates,anchors)
+        result['matching']=matching
+        if not matching['pass']:
+            stop=read(OUT/'result.json')
+            check('matching_failure_verdict',stop['status'] == 'MATCHING_INCONCLUSIVE' and stop['stage_reached'] == 'pair_matching' and stop['no_scientific_mechanism_verdict'] is True)
+            check('matching_failure_no_query',receipt['query_pixels_requested'] == receipt['query_images_decoded'] == stop['query_pixels_requested'] == 0)
+            check('matching_failure_no_outputs',all(not (OUT/name).exists() for name in ('intervention_freeze.json','fit_coverage_audit.json','prediction_freeze.json','scalar_predictions.csv','spatial_statistics.csv')))
+            result['decision']='NO_MATCHED_COMMON_SUPPORT_IN_EXPORTED_FIXED_CANDIDATE_GRAPH'
+        else:
+            banks=audit_banks(selected,candidates,anchors)
+            coverage=audit_fit_coverage(candidates,banks);result['coverage']=coverage
+            freeze=read(OUT/'intervention_freeze.json')
+            check('intervention_bound',freeze['selected_pairs_sha256'] == sha(OUT/'selected_pairs.csv') and freeze['bank_identities_sha256'] == sha(OUT/'bank_identities.csv') and freeze['plan_sha256'] == sha(OUT/'plan.json') and freeze['producer_sha256'] == sha(OUT/'run_p2.py'))
+            check('base_bank_hash',freeze['bank_hashes']['base'] == prior['bank_hashes']['odd_s0'])
+            check('intervention_fit_gate',freeze['fit_coverage_pass'] == coverage['pass'] and freeze['matching_pass'] is True and freeze['query_pixels_requested'] == 0)
+            if not coverage['pass']:
+                stop=read(OUT/'result.json')
+                check('coverage_failure_verdict',stop['status'] == 'MATCHING_INCONCLUSIVE' and stop['stage_reached'] == 'joint_fit_coverage' and stop['no_scientific_mechanism_verdict'] is True)
+                check('coverage_failure_no_query',receipt['query_pixels_requested'] == receipt['query_images_decoded'] == stop['query_pixels_requested'] == 0)
+                check('coverage_failure_no_outputs',all(not (OUT/name).exists() for name in ('prediction_freeze.json','scalar_predictions.csv','spatial_statistics.csv')))
+                result['decision']='GLOBAL_FIT_COVERAGE_MATCH_FAILED'
+            else:
+                result['decision']='FIT_MATCHING_PASSED_QUERY_ENDPOINT_AUDIT_REQUIRED_SEPARATELY'
+        result['status']='PASS_INDEPENDENT_FIT_CPU_VERIFICATION'
+        result['resources']={'p1_p2_gpu_seconds':receipt['total_p1_p2_gpu_wall_seconds'],
+                             'p1_p2_monitored_execution_seconds':prior_wall+monitor['wall_seconds'],
+                             'query_pixels_requested':receipt['query_pixels_requested'],'query_images_decoded':receipt['query_images_decoded']}
+    except Exception as error:
+        result['failure']={'type':type(error).__name__,'message':str(error),'traceback':traceback.format_exc()}
+    result.update(checks=len(CHECKS),failed=int(result['status'].startswith('FAILED')),maximum_numeric_error=MAX_ERROR,
+                  check_name_sha256=hashlib.sha256('\n'.join(CHECKS).encode()).hexdigest(),input_sha256=INPUT_SHA,
+                  verifier_sha256=sha(Path(__file__)),wall_seconds=time.perf_counter()-start,cpu_seconds=time.process_time()-cpu,
+                  peak_rss_bytes=peak_rss(),new_pixels=0,gpu=0,network=0,confirmation_access=0,
+                  limitations=['Original feature vectors and per-candidate distances were not saved; this audit recomputes formulas from exported scalars, not raw vector distances.',
+                               'Candidate enumeration completeness below each exported anchor-best row is a producer-code and receipt claim, not an independent feature-space enumeration.',
+                               'Fit probe per-image distance summaries are checked by independent group/camera aggregation; unsaved64 probe distances are not reconstructed.',
+                               'A numerical audit neither establishes novelty nor reverses previous failed scientific gates.'])
+    name='independent_verification' if not result['failed'] else 'independent_verification_failure_'+datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
+    (OUT/(name+'.json')).write_text(json.dumps(result,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+    lines=['# P2 independent CPU verification','',f"Status: **{result['status']}**",'',
+           f"Checks: {result['checks']}; failed: {result['failed']}; maximum numerical error: {MAX_ERROR:.12g}.",
+           f"CPU {result['cpu_seconds']:.6f}s; wall {result['wall_seconds']:.6f}s; peakRSS {result['peak_rss_bytes']}B.",
+           'New research pixels/GPU/network/confirmation access: 0.','',
+           f"Decision: {result.get('decision','Verifier failure; consult preserved JSON before any correction.')}",'',
+           '## Verification boundary','']+['- '+value for value in result['limitations']]
+    if 'matching' in result:
+        lines+=['','## Exact quota feasibility','',f"Failed cameras: {result['matching']['failed_cameras']}."]
+        for camera,certificate in result['matching']['certificates'].items():
+            for row in certificate['hall']['subsets']:
+                if not row['passes']:lines.append(f"- Camera{camera}, phases{row['phases']}: {row['distinct_source_neighbors']} distinct sources for {row['required_sources']} required slots (deficit{-row['slack']}).")
+    (OUT/(name+'.md')).write_text('\n'.join(lines)+'\n',encoding='utf-8')
+    print(json.dumps({key:result[key] for key in ('status','checks','failed','maximum_numeric_error','wall_seconds','cpu_seconds')}))
+    if result['failed']:sys.exit(1)
+
+
+if __name__ == '__main__':
+    if '--self-test' in sys.argv:self_test()
+    else:main()

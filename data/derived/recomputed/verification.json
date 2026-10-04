@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "checked_leaves": 6932,
+  "max_absolute_numeric_error": 1.4210854715202004e-14,
+  "errors": [],
+  "wall_seconds": 1.5323782000341453,
+  "numpy_version": "2.4.4",
+  "manifest_identity_sha256": "c580ed868943876c96f6e135a7f2e3f9fd489e49f0c9e34d9cf49d6827a7a23e",
+  "identity_binding_does_not_authenticate_image_bytes": true,
+  "input_sha256": {
+    "derived/e_scores.csv": "8d9c01c3b0459db0723289a40b8f251ff66b09c1ed2a5bf13e3e47e64e8d42a4",
+    "derived/p1_coverage.csv": "b7d5cf37a24f667563cd92fac73243e0a83dd8fa233b16b81d1dcb1252a66a93",
+    "derived/p1_scores.csv": "bf8404bbddf6f00cbf29870782a60717278c0b76e538328f6b7f5a69134a110d",
+    "derived/p1_spatial.csv": "36a36bba7634a85bdf29025dbcdbfb756713f24f2e1e7e0818df151ff2698a58",
+    "derived/p2_source_phase_edges.csv": "57e665c11d1dd0f5e53f9b4ab36601377dc016175d4e6d148f0a48e45031a30c",
+    "derived/reference_e.json": "1b1a61a117537f433f333978e123d47e35004d26a49ef541a8e65f5f16e50579",
+    "derived/reference_e_threshold_cross.csv": "abb45e6457e8be17189411b8e4b0ced6bbd5aaad86d92b7f23968e36e25da934",
+    "derived/reference_p1.json": "7ec1efd46c71afdfd97cd8b91a5e7586ffa58cec833af24506fa416d07c8cfd2",
+    "derived/reference_p2.json": "35d92282b7a9b5c770b54e6a8aa26bcf82574fad5fab586d37c16a70f6c47c92",
+    "derived/reference_x_operating.csv": "3dd0bbc02f5fdce468798d8750543de22e156e5b4feb068f2f87f1e243ba383b",
+    "derived/reference_x_primary.json": "67f83e358a8fd305dca86aba80aa8cd2e0ceab488e584382e81986a05dcc384b",
+    "derived/reference_y.json": "d4527ba1e676c49352d912458b817436a52c57f7537bc6e342a3644f69b0215b",
+    "derived/x_calibration_spatial.csv": "b99211d8a662649d564e2a049c31f40a65635f62e55a34f8e5b25e1de916e223",
+    "derived/x_deletions.csv": "ed32296ece7d805bb989543bb4cda398b2213bce921fd0e9119486ffc5f58def",
+    "derived/x_scores.csv": "76ee11101ef3516c5e6db03a4ffbed3fe3086f1b95c5e07d650642a5d1496b65",
+    "manifests/plastic_nut.csv": "726b67836d6a9983917fd78b1b1526946ba1796b23710c742b736fb478a35294",
+    "manifests/provenance.json": "be8522e917860c468ef4820d83603ab292ed32b843739f0107596b9fa3402baa"
+  },
+  "new_pixels": 0,
+  "confirmation_access": 0,
+  "gpu_seconds": 0
+}

@@ -1,0 +1,111 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Compare root reports with already persisted independent reconstruction.
+
+This imports only the independent verifier's resource/I/O helpers, never the
+producer or root analyzer. It does not repeat a scientific computation.
+"""
+import argparse
+import json
+import math
+from verify_results import Audit, HERE, ROOT, RUN, METHODS, read_json, read_csv, digest
+
+
+def compare(audit):
+    own = read_json(HERE/'independent_result.json')
+    published = read_json(ROOT/'analysis_result.json')
+    audit.check('own_reconstruction_status',own['status']=='PASS_INDEPENDENT_RECONSTRUCTION_PENDING_ANALYZER_COMPARISON')
+    audit.check('own_input_freeze_unchanged',own['input_sha256']['prediction_freeze']==digest(RUN/'prediction_freeze.json'))
+    audit.check('analysis_input_freeze_binding',published['prediction_freeze_sha256']==own['input_sha256']['prediction_freeze'])
+    audit.check('analysis_plan_binding',published['plan_sha256']==own['input_sha256']['plan'])
+    audit.check('analysis_source_binding',published['analyzer_sha256']==digest(ROOT/'analyze_results.py'))
+    audit.check('analysis_methods',tuple(published['methods'])==METHODS)
+    audit.check('analysis_bootstrap_draw_hashes',published['bootstrap_draw_sha256']==own['bootstrap']['draw_sha256_le_i8'])
+    errors=[]
+    def equal(name, actual, expected):
+        actual,expected=float(actual),float(expected)
+        error=abs(actual-expected)
+        errors.append(error)
+        audit.check(name,math.isfinite(actual) and error<=1e-12)
+    names={'fp':'normal_false_positive_groups','supported':'supported_detected_groups','any':'any_detected_groups',
+           'fpr':'normal_group_fpr','supported_tpr':'supported_group_tpr','any_tpr':'any_group_tpr',
+           'normal_groups':'normal_groups','abnormal_groups':'abnormal_groups','threshold':'threshold'}
+    expected_ops={r['method']:r for r in own['operating_points']}
+    for label,records in [('json',published['operating_points']),('csv',read_csv(ROOT/'operating_points.csv'))]:
+        audit.check(label+'_operating_methods',len(records)==9 and {r['method'] for r in records}==set(METHODS))
+        for row in records:
+            expected=expected_ops[row['method']]
+            for short,long in names.items(): equal(label+'_op_'+row['method']+'_'+short,row[short],expected[long])
+            equal(label+'_CP_lower_'+row['method'],row['fpr_cp95_lower'],expected['normal_group_fpr_exact_ci95'][0])
+            equal(label+'_CP_upper_'+row['method'],row['fpr_cp95_upper'],expected['normal_group_fpr_exact_ci95'][1])
+    metrics={'fpr':'normal_group_fpr','supported_tpr':'supported_group_tpr','any_tpr':'any_group_tpr'}
+    def ckey(row,short=False):
+        return row['candidate'],row['reference'],str(row['seed']),row['regime'],metrics[row['metric']] if short else row['metric']
+    expected_contrasts={ckey(r):r for r in own['paired_contrasts']}
+    for label,records in [('json',published['contrasts']),('csv',read_csv(ROOT/'paired_contrasts.csv'))]:
+        audit.check(label+'_contrast_keys',len(records)==len(expected_contrasts) and {ckey(r,True) for r in records}==set(expected_contrasts))
+        for row in records:
+            key=ckey(row,True); expected=expected_contrasts[key]
+            for name,value in [('point',expected['point']),('lower',expected['ci95'][0]),('upper',expected['ci95'][1])]:
+                equal(label+'_contrast_'+'_'.join(key)+'_'+name,row[name],value)
+    expected_intervals={(r['method'],r['regime'],r['metric']):r for r in own['method_intervals']}
+    interval_keys={(r['method'],r['regime'],metrics[r['metric']]) for r in published['method_uncertainty']}
+    audit.check('method_intervals_keys',len(published['method_uncertainty'])==len(expected_intervals) and interval_keys==set(expected_intervals))
+    for row in published['method_uncertainty']:
+        key=row['method'],row['regime'],metrics[row['metric']]
+        expected=expected_intervals[key]
+        for name,value in [('point',expected['point']),('lower',expected['ci95'][0]),('upper',expected['ci95'][1])]:
+            equal('method_interval_'+'_'.join(key)+'_'+name,row[name],value)
+    expected_cross={(str(r['seed']),r['score_method'],r['threshold_method']):r for r in own['threshold_cross']}
+    cross=read_csv(ROOT/'threshold_cross.csv')
+    audit.check('cross_keys',len(cross)==27 and {(r['seed'],r['score_method'],r['threshold_method']) for r in cross}==set(expected_cross))
+    for row in cross:
+        key=row['seed'],row['score_method'],row['threshold_method']
+        expected=expected_cross[key]
+        for field in ('threshold','fp','supported','any','normal_groups','abnormal_groups'):
+            equal('cross_'+'_'.join(key)+'_'+field,row[field],expected[names[field]])
+    expected_logs={str(r['seed']):r for r in own['normal_log_native_over_uniform']}
+    audit.check('normal_log_seeds',len(published['normal_log_native_over_uniform'])==3 and {str(r['seed']) for r in published['normal_log_native_over_uniform']}=={'0','1','2'})
+    for row in published['normal_log_native_over_uniform']:
+        expected=expected_logs[str(row['seed'])]
+        for name,value in [('point',expected['point']),('lower',expected['ci95'][0]),('upper',expected['ci95'][1])]:
+            equal('normal_log_'+str(row['seed'])+'_'+name,row[name],value)
+    expected_groups={(r['population'],r['group_key']):r for r in own['group_scores']}
+    group_rows=read_csv(ROOT/'group_scores.csv')
+    audit.check('group_scalar_table_count',len(group_rows)==len(expected_groups))
+    audit.check('group_scalar_table_keys',{(r['population'],r['group_key']) for r in group_rows}==set(expected_groups))
+    for row in group_rows:
+        expected=expected_groups[row['population'],row['group_key']]
+        for method in METHODS: equal('group_'+row['population']+row['group_key']+method,row[method],expected[method])
+    expected_camera={(r['method'],r['camera']):r for r in own['normal_camera_summary']}
+    camera=read_csv(ROOT/'normal_camera_summary.csv')
+    audit.check('normal_camera_rows',len(camera)==45 and {(r['method'],r['camera']) for r in camera}==set(expected_camera))
+    for row in camera:
+        expected=expected_camera[row['method'],row['camera']]
+        for key in ('n_images','mean_squared_nearest','p95_squared_nearest','max_squared_nearest'):
+            equal('normal_camera_'+row['method']+row['camera']+key,row[key],expected[key])
+    actual_gate=published['gate']; expected_gate=own['gates']
+    for seed,value in enumerate(expected_gate['each_seed_delta_supported_tpr']): equal('gate_seed_'+str(seed),actual_gate['per_seed_delta_supported_tpr'][seed],value)
+    for short,expected in [('all_seeds_gain_ge_10pp',all(expected_gate['each_seed_delta_at_least_10pp'])),
+                           ('mean_joint_ci_lower_positive',expected_gate['joint_fixed_seed_mean_ci_lower_positive']),
+                           ('primary_pass',expected_gate['primary_operational_gate_pass']),
+                           ('separate_fp_point_screen',expected_gate['descriptive_risk_point_screen_pass']),
+                           ('risk_noninferiority_established',False),('independent_confirmation',False),('main_contribution_established',False)]:
+        audit.check('gate_'+short,actual_gate[short] is expected)
+    primary=published['primary_contrast']; reference=expected_contrasts[('uniform','native','fixed_seed_mean','joint','supported_group_tpr')]
+    for key,value in [('point',reference['point']),('lower',reference['ci95'][0]),('upper',reference['ci95'][1])]: equal('primary_record_'+key,primary[key],value)
+    return audit.finish({'status':'PASS_INDEPENDENT_NUMERICAL_COMPARISON','max_absolute_error':max(errors),
+                         'scalar_comparisons':len(errors),'scientific_gate':expected_gate,
+                         'independent_result_sha256':digest(HERE/'independent_result.json'),
+                         'analysis_result_sha256':digest(ROOT/'analysis_result.json'),
+                         'comparator_sha256':digest(__file__),
+                         'scope':'Independent scalar, identity, group, interval and gate reconstruction; no feature-distance or model rerun.'},'comparison.json')
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--prior-cpu-seconds',type=float,required=True)
+    args=parser.parse_args()
+    result=compare(Audit(args.prior_cpu_seconds))
+    print(json.dumps({'status':result['status'],'checks':result['check_count'],'max_absolute_error':result['max_absolute_error'],'resource':result['resource']}))

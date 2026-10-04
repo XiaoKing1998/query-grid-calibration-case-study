@@ -1,0 +1,398 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Independent CPU verification of P1 frozen summaries and analysis.
+
+Does not import producer/analyzer, initialize torch, retrieve pixels, or access
+confirmation scores. Metadata labels are retained only for the frozen 1135 paths.
+Run only after root authorizes verification of completed inference and analysis.
+"""
+from pathlib import Path
+from collections import defaultdict, Counter
+import csv
+import ctypes
+import datetime
+import hashlib
+import json
+import math
+import sys
+import time
+import traceback
+import zipfile
+
+import numpy as np
+
+OUT = Path(__file__).resolve().parent
+REPO = Path('${PROJECT_ROOT}')
+BASE = REPO/'artifacts/ram_ad_20260918'
+OLD = Path('${RESEARCH_WORKSPACE}/innovation_loop_20261003_session01/bank_coverage_attempt01')
+INPUTS = BASE/'realiad_static_development/attempt02/results/plastic_nut/inputs.csv'
+META = BASE/'realiad_metadata_admission/realiad_jsons.zip'
+IDENTITY = ('category', 'path', 'group_key', 'camera', 'research_role')
+METHODS = [f'{c}_s{s}' for c in ('odd', 'balanced', 'random') for s in range(3)]
+PAIRS = [('balanced', 'odd'), ('random', 'odd'), ('random', 'balanced')]
+PHASES = ('00', '01', '10', '11')
+READOUTS = ['full'] + ['parity'+p for p in PHASES] + ['interior_parity'+p for p in PHASES]
+METRICS = ('normal_group_fpr', 'supported_group_tpr', 'any_group_tpr')
+CHECKS = []
+MAX_ERROR = 0.0
+INPUT_HASHES = {}
+
+
+def digest(path):
+    h = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for block in iter(lambda: stream.read(8*1024*1024), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def data(path):
+    INPUT_HASHES[str(path)] = digest(path)
+    return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+
+
+def table(path):
+    INPUT_HASHES[str(path)] = digest(path)
+    with Path(path).open(encoding='utf-8-sig', newline='') as stream:
+        return list(csv.DictReader(stream))
+
+
+def check(name, condition):
+    CHECKS.append(name)
+    if not bool(condition):
+        raise AssertionError(name)
+
+
+def close(name, observed, expected, atol=2e-11):
+    global MAX_ERROR
+    a, b = np.asarray(observed, dtype=float), np.asarray(expected, dtype=float)
+    check(name+':shape', a.shape == b.shape)
+    error = float(np.max(np.abs(a-b))) if a.size else 0.0
+    MAX_ERROR = max(MAX_ERROR, error)
+    check(name, np.isfinite(a).all() and np.isfinite(b).all() and np.allclose(a, b, rtol=0, atol=atol))
+
+
+def peak_rss():
+    class Mem(ctypes.Structure):
+        _fields_ = [('cb', ctypes.c_ulong), ('PageFaultCount', ctypes.c_ulong),
+                    ('PeakWorkingSetSize', ctypes.c_size_t), ('WorkingSetSize', ctypes.c_size_t),
+                    ('QuotaPeakPagedPoolUsage', ctypes.c_size_t), ('QuotaPagedPoolUsage', ctypes.c_size_t),
+                    ('QuotaPeakNonPagedPoolUsage', ctypes.c_size_t), ('QuotaNonPagedPoolUsage', ctypes.c_size_t),
+                    ('PagefileUsage', ctypes.c_size_t), ('PeakPagefileUsage', ctypes.c_size_t)]
+    k = ctypes.WinDLL('kernel32'); k.GetCurrentProcess.restype = ctypes.c_void_p
+    p = ctypes.WinDLL('psapi'); p.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong]
+    v = Mem(); v.cb = ctypes.sizeof(v)
+    if not p.GetProcessMemoryInfo(k.GetCurrentProcess(), ctypes.byref(v), v.cb):
+        raise OSError('GetProcessMemoryInfo')
+    return int(v.PeakWorkingSetSize)
+
+
+def check_distribution(name, row, samples, point):
+    expected = {'point': point, 'bootstrap_mean': np.mean(samples), 'bootstrap_median': np.median(samples),
+                'ci95': np.quantile(samples, [.025, .975]), 'fraction_positive': np.mean(samples > 0),
+                'fraction_nonnegative': np.mean(samples >= 0)}
+    for field, value in expected.items():
+        close(name+':'+field, row[field], value)
+
+
+def unique_index(records, fields):
+    result = {tuple(row[k] for k in fields): row for row in records}
+    check('unique:'+':'.join(fields), len(result) == len(records))
+    return result
+
+
+def candidate_check(preflight, inputs):
+    frozen = data(OUT/'candidate_identities.json')
+    fit = [r for r in inputs if r['research_role'] == 'source_fit']
+    check('candidate_fit_count', len(fit) == len(frozen['identities']) == 875)
+    coord = {c: [] for c in ('odd', 'balanced', 'random')}
+    order_hash = hashlib.sha256()
+    for i, (source, saved) in enumerate(zip(fit, frozen['identities'])):
+        check('candidate_metadata:'+str(i), all(source[k] == saved[k] for k in IDENTITY) and saved['fit_image_index'] == i)
+        canonical = {k: source[k] for k in ('path', 'group_key', 'category', 'camera', 'research_role')}
+        canonical['official_split'] = 'train'
+        order_hash.update((json.dumps(canonical, sort_keys=True, ensure_ascii=False, separators=(',', ':'))+'\n').encode())
+        path = source['path']
+        seeds = [int.from_bytes(hashlib.sha256((tag+path).encode()).digest()[:8], 'little')
+                 for tag in ('bank256:', 'phase256:', 'random256-v1:')]
+        coarse = np.random.Generator(np.random.PCG64(seeds[0])).choice(1024, size=256, replace=False)
+        parity = np.random.Generator(np.random.PCG64(seeds[1])).permutation(np.tile(np.arange(4), 64))
+        row, col = np.divmod(coarse, 32)
+        expected = {'odd': 64*(2*row+1)+2*col+1,
+                    'balanced': 64*(2*row+parity//2)+2*col+parity%2,
+                    'random': np.random.Generator(np.random.PCG64(seeds[2])).choice(4096, size=256, replace=False)}
+        for construction, arr in expected.items():
+            check('candidate_members_order:'+construction+':'+str(i), np.array_equal(saved[construction], arr))
+            check('candidate_unique_bounds:'+construction+':'+str(i), len(set(arr)) == 256 and min(arr) >= 0 and max(arr) < 4096)
+            coord[construction].append(arr)
+    check('source_order_hash', order_hash.hexdigest() == preflight['source_order_sha256'] == frozen['source_order_sha256'])
+    for construction, rows in coord.items():
+        sha = hashlib.sha256(np.array(rows, dtype='<i8').tobytes()).hexdigest()
+        check('candidate_coordinate_hash:'+construction, sha == frozen['candidate_coordinate_sha256'][construction] == preflight['candidate_coordinate_sha256'][construction])
+    return fit, coord
+
+
+def regions():
+    result = {'top_left': (127, lambda r,c: r == 0 or c == 0),
+              'bottom_right': (127, lambda r,c: r == 63 or c == 63),
+              'outer_ring': (252, lambda r,c: r in (0,63) or c in (0,63)),
+              'interior': (3844, lambda r,c: 1 <= r <= 62 and 1 <= c <= 62)}
+    for p in PHASES:
+        a,b = map(int,p)
+        result['parity'+p] = (1024, lambda r,c,a=a,b=b: r%2 == a and c%2 == b)
+        result['interior_parity'+p] = (961, lambda r,c,a=a,b=b: 1 <= r <= 62 and 1 <= c <= 62 and r%2 == a and c%2 == b)
+    for name,(count,predicate) in result.items():
+        check('independent_region_count:'+name, sum(predicate(r,c) for r in range(64) for c in range(64)) == count)
+    return result
+
+
+def main():
+    wall, cpu = time.perf_counter(), time.process_time()
+    check('no_overwrite', not (OUT/'independent_verification.json').exists())
+    plan, pre, freeze = data(OUT/'plan.json'), data(OUT/'preflight.json'), data(OUT/'prediction_freeze.json')
+    result = data(OUT/'analysis_result.json')
+    check('methods_frozen', plan['methods'] == freeze['methods'] == METHODS)
+    check('plan_hash', digest(OUT/'plan.json') == pre['plan_sha256'] == freeze['plan_sha256'])
+    check('producer_hash', digest(OUT/'runner_draft.py') == pre['producer_sha256'] == freeze['producer_sha256'])
+    for filename, expected in {**pre['dependency_hashes'], **pre['checkpoint_hashes']}.items():
+        check('dependency_sha:'+filename, digest(filename) == expected)
+    for filename, expected in freeze['sha256_files'].items():
+        check('frozen_summary_sha:'+filename, digest(OUT/filename) == expected)
+    check('freeze_complete', freeze['status'] == 'P1_PREDICTIONS_FROZEN' and freeze['query_rows'] == 1135)
+    completion = data(OUT/'analysis_completion.json')
+    check('analysis_result_binding', digest(OUT/'analysis_result.json') == completion['result_sha256'])
+    check('analyzer_source_binding', digest(OUT/'analyze_p1.py') == completion['analysis_sha256'])
+    check('planned_sampling', plan['uncertainty']['bootstrap_replicates'] == 5000 and plan['uncertainty']['seed'] == 20261031)
+    expected_rows = {'operating_rows':9,'group_rows':9*151,'calibration_rows':9*76,
+                     'contrast_rows':9,'bootstrap_methods':81,'bootstrap_contrasts':108,
+                     'normal_contrasts':162,'coverage_rows':27,'camera_rows':405,
+                     'peak_rows':18,'threshold_distributions':9}
+    for name,count in expected_rows.items():
+        check('analysis_complete_matrix:'+name,len(result[name]) == count)
+    check('scope_respected', freeze['confirmation_access'] == freeze['masks_requested'] == 0 and freeze['payload_saved'] is False)
+    probe = data(OUT/'resource_probe.json')
+    check('probe_complete', probe['status'] == 'PASS_RESOURCE_PROJECTION' and probe['synthetic_only'])
+    close('gpu_sum', freeze['total_p1_gpu_wall_seconds'], probe['gpu_wall_seconds']+freeze['gpu_wall_seconds'])
+    check('gpu_budget', freeze['total_p1_gpu_wall_seconds'] <= 1800)
+    for mode in ('probe', 'inference'):
+        supervisor, monitor = data(OUT/(mode+'_supervisor.json')), data(OUT/(mode+'_execution_monitor.json'))
+        check(mode+':exit', supervisor['exit_code'] == 0 and supervisor['timeout'] is False and monitor['status'] == 'FINISHED' and monitor['parent_exit_code'] == 0)
+        check(mode+':rss', monitor['sampled_peak_tree_rss_bytes'] <= 40*1024**3 and all(r['native_peak_rss_bytes'] <= 40*1024**3 for r in monitor['process_evidence'].values()))
+        check(mode+':wall', monitor['total_p1_execution_wall_seconds'] <= 5400)
+    inputs = table(INPUTS)
+    check('input_role_counts', dict(Counter(r['research_role'] for r in inputs)) == {'source_fit':875,'source_calibration':380,'development':755})
+    allowed = {r['path']:r for r in inputs}
+    check('input_unique_paths', len(allowed) == 2010)
+    fit, coords = candidate_check(pre, inputs)
+    scalars, statistics, coverage, banks = [table(OUT/name) for name in ('scalar_predictions.csv','spatial_statistics.csv','normal_calibration_coverage.csv','bank_identities.csv')]
+    query = {r['path']:r for r in scalars}
+    check('query_whitelist', len(query) == len(scalars) == 1135 and set(query) == {p for p,r in allowed.items() if r['research_role'] != 'source_fit'})
+    for path,row in query.items():
+        check('query_metadata:'+path, all(row[k] == allowed[path][k] for k in IDENTITY))
+        check('finite_positive_full:'+path, all(math.isfinite(float(row[m])) and float(row[m]) > 0 for m in METHODS))
+    group = defaultdict(list)
+    for row in inputs:
+        group[row['group_key']].append(row)
+    for key,rr in group.items():
+        check('group_identity:'+key, len(rr) == 5 and {r['camera'] for r in rr} == set('12345') and len({r['research_role'] for r in rr}) == 1)
+    oldfreeze = data(OLD/'prediction_freeze.json')
+    oldscalar = {r['path']:r for r in table(OLD/'scalar_predictions.csv')}
+    oldbanks = table(OLD/'new_bank_source_identities.csv')
+    check('old_scalar_hash', digest(OLD/'scalar_predictions.csv') == oldfreeze['scalar_sha256'])
+    for new,old in [('odd_s0','dino_odd_own'),('balanced_s0','dino_balanced_own')]:
+        check('seed0_bank_sha:'+new, freeze['bank_hashes'][new] == oldfreeze['bank_hashes'][old])
+        check('seed0_full_scores:'+new, all(float(row[new]) == float(oldscalar[p][old]) for p,row in query.items()))
+        selected, previous = [r for r in banks if r['method'] == new], [r for r in oldbanks if r['method'] == old]
+        check('seed0_ordered_identities:'+new, len(selected) == len(previous) == 4096 and all(a['path'] == b['path'] and all(a[k] == b[k] for k in ('prototype','row','col')) for a,b in zip(selected,previous)))
+    check('bank_total', len(banks) == 9*4096 and {r['method'] for r in banks} == set(METHODS))
+    for method in METHODS:
+        chosen = [r for r in banks if r['method'] == method]
+        construction, seed = method.split('_s')
+        check('prototype_order:'+method, [int(r['prototype']) for r in chosen] == list(range(4096)))
+        for r in chosen:
+            ix = int(r['candidate_index']); i,j = divmod(ix,256)
+            check('prototype_candidate:'+method+':'+r['prototype'], 0 <= ix < 224000 and r['construction'] == construction and r['seed'] == seed and r['path'] == fit[i]['path'] and r['group_key'] == fit[i]['group_key'] and r['camera'] == fit[i]['camera'] and int(r['native_grid']) == 64 and 64*int(r['row'])+int(r['col']) == int(coords[construction][i][j]))
+    stats = unique_index(statistics,('method','path'))
+    check('spatial_total', len(stats) == 9*1135 and set(stats) == {(m,p) for m in METHODS for p in query})
+    region = regions()
+    for (m,p),r in stats.items():
+        check('spatial_metadata:'+m+':'+p, all(r[k] == query[p][k] for k in IDENTITY))
+        full = float(r['max']); ties = int(r['image_max_tie_count'])
+        ar,ac = int(r['argmax_row']),int(r['argmax_col'])
+        check('full_maximum:'+m+':'+p, full == float(query[p][m]) == max(float(r['parity'+a+'_max']) for a in PHASES) and full == max(float(r['interior_max']),float(r['outer_ring_max'])))
+        check('full_counts_coords:'+m+':'+p, int(r['evaluated_query_cells']) == 4096 and 1 <= ties <= 4096 and 0 <= ar < 64 and 0 <= ac < 64)
+        check('full_phase_ties:'+m+':'+p, sum(int(r['image_max_ties_parity'+a]) for a in PHASES) == ties)
+        check('interior_phase_ties:'+m+':'+p, sum(int(r['image_max_ties_interior_parity'+a]) for a in PHASES) == int(r['image_max_ties_interior']))
+        check('interior_max_phases:'+m+':'+p, float(r['interior_max']) == max(float(r['interior_parity'+a+'_max']) for a in PHASES))
+        for name,(size,predicate) in region.items():
+            maximum = float(r[name+'_max']); local_ties = int(r[name+'_max_tie_count']); full_ties = int(r['image_max_ties_'+name])
+            rr,cc = int(r[name+'_argmax_row']),int(r[name+'_argmax_col'])
+            check('region:'+m+':'+p+':'+name, math.isfinite(maximum) and 0 <= maximum <= full and 0 <= rr < 64 and 0 <= cc < 64 and predicate(rr,cc) and 1 <= local_ties <= size and 0 <= full_ties <= min(local_ties,ties) and full_ties == (local_ties if maximum == full else 0))
+            if predicate(ar,ac):
+                check('peak_in_region:'+m+':'+p+':'+name, maximum == full)
+    cov = unique_index(coverage,('method','path'))
+    check('coverage_total', len(cov) == 380*9 and set(cov) == {(m,p) for m in METHODS for p,r in query.items() if r['research_role'] == 'source_calibration'})
+    for (m,p),r in cov.items():
+        mean,p95,maximum = [float(r[k+'_squared_nearest']) for k in ('mean','p95','max')]
+        check('coverage_bounds:'+m+':'+p, all(r[k] == query[p][k] for k in IDENTITY) and all(math.isfinite(x) for x in (mean,p95,maximum)) and 0 <= mean <= maximum and 0 <= p95 <= maximum and maximum == float(query[p][m]))
+    # Official identity/label metadata only; immediately discard entries outside query whitelist.
+    check('official_metadata_hash', digest(META) == '7299bfee9d8c90e4caf72f49dd1340ce425cdcd2a5f32c70339ddc2123a2c27f')
+    INPUT_HASHES[str(META)] = digest(META)
+    with zipfile.ZipFile(META) as archive:
+        metadata = json.loads(archive.read('realiad_jsons/plastic_nut.json'))
+    labels = {}
+    prefix = metadata['meta']['prefix'].rstrip('/')
+    for split in ('train','test'):
+        for row in metadata[split]:
+            path = prefix+'/'+row['image_path'].lstrip('/')
+            if path in query:
+                check('official_query_split:'+path, split == ('train' if query[path]['research_role'] == 'source_calibration' else 'test'))
+                labels[path] = int(row['anomaly_class'] != 'OK')
+    del metadata
+    check('official_labels_complete', set(labels) == set(query))
+    calkeys = sorted(g for g,rr in group.items() if rr[0]['research_role'] == 'source_calibration')
+    devkeys = sorted(g for g,rr in group.items() if rr[0]['research_role'] == 'development')
+    normkeys = [g for g in devkeys if not any(labels[r['path']] for r in group[g])]
+    badkeys = [g for g in devkeys if any(labels[r['path']] for r in group[g])]
+    check('group_class_counts', (len(calkeys),len(normkeys),len(badkeys)) == (76,44,107))
+    check('cal_normal_only', all(labels[r['path']] == 0 for g in calkeys for r in group[g]))
+    check('abnormal_view_count', sum(labels.values()) == 258)
+    def matrix(keys, only_anomalous=False):
+        return np.array([[max(float(query[r['path']][m]) for r in group[g] if not only_anomalous or labels[r['path']]) for m in METHODS] for g in keys])
+    cal,normal,supported,anybad = matrix(calkeys),matrix(normkeys),matrix(badkeys,True),matrix(badkeys)
+    tau = np.sort(cal,axis=0)[73]
+    rng = np.random.Generator(np.random.PCG64(20261031))
+    ci = rng.integers(76,size=(5000,76),dtype=np.int64)
+    ni = rng.integers(44,size=(5000,44),dtype=np.int64)
+    bi = rng.integers(107,size=(5000,107),dtype=np.int64)
+    drawhash = result['bootstrap_draws']['sha256_raw_contiguous']
+    for label,draw in [('calibration',ci),('normal_development',ni),('abnormal_development',bi)]:
+        check('paired_draw_sha:'+label, digest_bytes(draw) == drawhash[label])
+    # Sort-based order statistics are independent of analyzer's partition implementation.
+    taub = np.sort(cal[ci],axis=1)[:,73,:]
+    arrays = [normal,supported,anybad]
+    alarm = [a > tau for a in arrays]
+    point = np.array([x.mean(axis=0) for x in alarm]).T
+    boot = {}
+    for regime in ('fixed_calibration','calibration_only','joint'):
+        values=[]
+        for a,idx in zip(arrays,(ni,bi,bi)):
+            sample = a[None,:,:] if regime == 'calibration_only' else a[idx]
+            thresholds = tau if regime == 'fixed_calibration' else taub[:,None,:]
+            values.append((sample > thresholds).mean(axis=1))
+        boot[regime] = np.stack(values,axis=2)
+    operations=unique_index(result['operating_rows'],('method',))
+    check('all_operating_points', len(operations) == 9)
+    from scipy.stats import beta
+    for j,m in enumerate(METHODS):
+        row=operations[(m,)]; fp,tp,atp=[int(a[:,j].sum()) for a in alarm]
+        for field,value in [('group_threshold',tau[j]),('normal_groups',44),('abnormal_groups',107),('normal_false_positive_groups',fp),('supported_detected_groups',tp),('any_detected_groups',atp),*zip(METRICS,point[j])]:
+            close('operation:'+m+':'+field,row[field],value)
+        cp=(0. if fp == 0 else beta.ppf(.025,fp,45-fp), 1. if fp == 44 else beta.ppf(.975,fp+1,44-fp))
+        close('clopper_pearson:'+m,[row['normal_fpr_cp95_lower'],row['normal_fpr_cp95_upper']],cp)
+    bmethods=unique_index(result['bootstrap_methods'],('method','regime','metric'))
+    for j,m in enumerate(METHODS):
+        for regime in boot:
+            for k,metric in enumerate(METRICS):
+                check_distribution('bootstrap_method:'+m+':'+regime+':'+metric,bmethods[(m,regime,metric)],boot[regime][:,j,k],point[j,k])
+    contrasts=unique_index(result['contrast_rows'],('candidate','reference','seed'))
+    bcontrasts=unique_index(result['bootstrap_contrasts'],('candidate','reference','seed','regime','metric'))
+    for cand,ref in PAIRS:
+        js=[METHODS.index(f'{cand}_s{s}') for s in range(3)];ks=[METHODS.index(f'{ref}_s{s}') for s in range(3)]
+        for s,j,k in zip(range(3),js,ks):
+            row=contrasts[(cand,ref,s)]
+            for field,value in zip(('delta_fpr','delta_supported_tpr','delta_any_tpr'),point[j]-point[k]):
+                close('contrast:'+cand+':'+ref+':'+str(s)+':'+field,row[field],value)
+            close('normal_discordance:'+cand+':'+ref+':'+str(s),[row['normal_candidate_only_alarm'],row['normal_reference_only_alarm']],[(alarm[0][:,j] & ~alarm[0][:,k]).sum(),(~alarm[0][:,j] & alarm[0][:,k]).sum()])
+        for regime in boot:
+            delta=boot[regime][:,js,:]-boot[regime][:,ks,:];actual=point[js]-point[ks]
+            for seed in (0,1,2,'fixed_seed_mean'):
+                x=delta.mean(axis=1) if seed == 'fixed_seed_mean' else delta[:,seed,:]
+                p=actual.mean(axis=0) if seed == 'fixed_seed_mean' else actual[seed]
+                for k,metric in enumerate(METRICS):
+                    check_distribution('contrast_boot:'+str((cand,ref,seed,regime,metric)),bcontrasts[(cand,ref,seed,regime,metric)],x[:,k],p[k])
+    normcontrast=unique_index(result['normal_contrasts'],('candidate','reference','seed','endpoint'))
+    g={}
+    for cand,ref in PAIRS:
+        for seed in range(3):
+            cm,rm=f'{cand}_s{seed}',f'{ref}_s{seed}';vectors={}
+            for readout in READOUTS:
+                field='max' if readout == 'full' else readout+'_max'
+                vectors[readout]=np.array([sum(math.log(float(stats[(rm,r['path'])][field])/float(stats[(cm,r['path'])][field])) for r in group[key])/5 for key in calkeys])
+                v=vectors[readout];name=f'log_{ref}_over_{cand}:{readout}'
+                check_distribution('normal_log:'+str((cand,ref,seed,name)),normcontrast[(cand,ref,seed,name)],v[ci].mean(axis=1),v.mean())
+                if cand == 'balanced' and ref == 'odd' and readout == 'full':g[seed]=v.mean()
+            for readout in READOUTS[1:]:
+                v=vectors['full']-vectors[readout];name='full_minus_'+readout
+                check_distribution('normal_interaction:'+str((cand,ref,seed,name)),normcontrast[(cand,ref,seed,name)],v[ci].mean(axis=1),v.mean())
+            j,k=METHODS.index(cm),METHODS.index(rm);name=f'log_tau_{ref}_over_{cand}'
+            check_distribution('threshold_log:'+str((cand,ref,seed)),normcontrast[(cand,ref,seed,name)],np.log(taub[:,k]/taub[:,j]),math.log(tau[k]/tau[j]))
+    for row in result['threshold_distributions']:
+        j=METHODS.index(row['method'])
+        check_distribution('threshold_distribution:'+row['method'],row,taub[:,j],tau[j])
+        check('threshold_distinct:'+row['method'],row['distinct_resampled_thresholds'] == len(set(taub[:,j])))
+    saved_groups=unique_index(result['group_rows'],('method','group_key'))
+    saved_cal=unique_index(result['calibration_rows'],('method','group_key'))
+    for j,m in enumerate(METHODS):
+        for i,key in enumerate(calkeys):close('cal_group:'+m+':'+key,saved_cal[(m,key)]['group_score'],cal[i,j],atol=0)
+        for keys,scores,bad in [(normkeys,normal,False),(badkeys,anybad,True)]:
+            for i,key in enumerate(keys):
+                row=saved_groups[(m,key)]
+                check('group_label:'+m+':'+key,row['is_anomaly'] == int(bad))
+                close('group_score:'+m+':'+key,row['group_score'],scores[i,j],atol=0)
+                close('group_threshold:'+m+':'+key,row['threshold'],tau[j],atol=0)
+                check('group_alarm:'+m+':'+key,row['any_alarm'] == int(scores[i,j] > tau[j]) and row['supported_alarm'] == int(bad and supported[i,j] > tau[j]))
+                check('supported_score:'+m+':'+key,row['supported_score'] == (float(supported[i,j]) if bad else None))
+    for row in result['coverage_rows']:
+        field=row['field']+'_squared_nearest';values=np.array([float(cov[(row['method'],r['path'])][field]) for key in calkeys for r in group[key]])
+        for name,val in [('mean',values.mean()),('median',np.median(values)),('q95_across_views',np.quantile(values,.95)),('max_across_views',values.max())]:close('coverage_summary:'+row['method']+':'+field+':'+name,row[name],val)
+    for row in result['camera_rows']:
+        field='max' if row['readout'] == 'full' else row['readout']+'_max'
+        values=np.array([float(stats[(row['method'],r['path'])][field]) for key in calkeys for r in group[key] if int(r['camera']) == row['camera']])
+        check('camera_view_count:'+str((row['method'],row['camera'],row['readout'])),len(values) == 76)
+        for name,val in [('mean',values.mean()),('median',np.median(values)),('q95',np.quantile(values,.95)),('max',values.max())]:close('camera_summary:'+str((row['method'],row['camera'],row['readout'],name)),row[name],val)
+    for row in result['peak_rows']:
+        keys=calkeys if row['population'] == 'source_calibration' else normkeys
+        records=[stats[(row['method'],r['path'])] for key in keys for r in group[key]]
+        check('peak_views:'+str((row['method'],row['population'])),row['views'] == len(records))
+        check('peak_boundary:'+str((row['method'],row['population'])),row['representative_boundary_peaks'] == sum(int(r['argmax_row']) in (0,63) or int(r['argmax_col']) in (0,63) for r in records))
+        check('peak_unique:'+str((row['method'],row['population'])),row['unique_peaks'] == sum(int(r['image_max_tie_count']) == 1 for r in records))
+        for phase in PHASES:
+            check('peak_phase:'+str((row['method'],row['population'],phase)),row['representative_parity'+phase] == sum(f"{int(r['argmax_row'])%2}{int(r['argmax_col'])%2}" == phase for r in records))
+    newgates={s: bool(point[3+s,1]-point[s,1] >= .10 and g[s] > 0) for s in (1,2)}
+    mainjoint=(boot['joint'][:,3:6,1]-boot['joint'][:,:3,1]).mean(axis=1)
+    gate=all(newgates.values()) and np.quantile(mainjoint,.025) > 0
+    randomscreen=all(point[6+s,1]-point[3+s,1] >= -.05 and int(alarm[0][:,6+s].sum())-int(alarm[0][:,3+s].sum()) <= 1 for s in range(3))
+    decision=result['decision']
+    check('p1_effect_gate', decision['p1_effect_gate_pass'] == bool(gate))
+    check('random_screen', decision['random_point_sufficiency_screen'] == bool(randomscreen))
+    for s,passed in newgates.items():
+        check('new_seed_gate:'+str(s),decision['new_seed_gates'][str(s)]['pass'] == passed)
+        close('new_seed_g:'+str(s),decision['new_seed_gates'][str(s)]['normal_mean_log_odd_over_balanced'],g[s])
+    check('old_failures_preserved',decision['old_bank_scientific_gates_remain_failed'] is True and decision['innovation_or_equal_population_risk_established'] is False)
+    check('p2_scope',decision['p2_eligible_only_if_p0_and_identifiable_intervention'] == bool(gate))
+    for name,key in [('operating_points.csv','operating_rows'),('group_predictions.csv','group_rows'),('calibration_group_scores.csv','calibration_rows'),('paired_contrasts.csv','contrast_rows'),('normal_coverage_summary.csv','coverage_rows'),('normal_camera_summary.csv','camera_rows'),('normal_peak_summary.csv','peak_rows')]:
+        csvrows=table(OUT/name);jsonrows=result[key]
+        check('csv_rows:'+name,len(csvrows) == len(jsonrows))
+        check('csv_matches_json:'+name,all(set(a) == set(b) and all(a[k] == ('' if b[k] is None else str(b[k])) for k in a) for a,b in zip(csvrows,jsonrows)))
+    rss=peak_rss();check('verifier_rss_budget',rss <= 40*1024**3)
+    output={'status':'PASS_INDEPENDENT_CPU_VERIFICATION','checks':len(CHECKS),'failed':0,'check_name_sha256':hashlib.sha256('\n'.join(CHECKS).encode()).hexdigest(),'maximum_numeric_error':MAX_ERROR,'input_sha256':INPUT_HASHES,'verifier_sha256':digest(__file__),'recomputed_decision':{'p1_effect_gate_pass':bool(gate),'random_point_sufficiency_screen':bool(randomscreen),'new_seed_gates':newgates,'fixed_three_seed_mean_joint_supported_ci95':np.quantile(mainjoint,[.025,.975]).tolist()},'scope':'Independent metadata/summary and bootstrap recomputation. No bank tensor or dense map re-inference; bank hash comparison relies on frozen producer receipts. Not novelty validation or independent data confirmation.','resource':{'wall_seconds':time.perf_counter()-wall,'cpu_seconds':time.process_time()-cpu,'peak_rss_bytes':rss,'gpu_seconds':0,'new_pixels':0,'confirmation_pixels_or_scores':0,'network_requests':0},'command':[sys.executable,'-B',str(Path(__file__).resolve())]}
+    with (OUT/'independent_verification.json').open('x',encoding='utf-8') as stream:json.dump(output,stream,indent=2,ensure_ascii=False,allow_nan=False)
+    report=f"# P1 独立数值核验\n\n状态：PASS；{len(CHECKS):,}项检查，0失败。最大比较误差{MAX_ERROR:.3g}。\n\n- 冻结hash、2010角色身份、候选完整成员和顺序、九库各4096有序来源、seed0哈希/1135全分数通过。\n- 全query/四相位/内部961格区域、峰和tie数的摘要一致性通过。\n- rank74阈值、全部九工作点、三套配对组bootstrap、正常log交互及推进门已独立重算。\n- P1效应门：{bool(gate)}；随机基线观察工作点接近筛查：{bool(randomscreen)}。\n- CPU{output['resource']['cpu_seconds']:.3f}秒，墙钟{output['resource']['wall_seconds']:.3f}秒，峰值RSS{rss}字节。GPU/网络/新像素/确认分数访问均0。\n\n核验器没有导入producer或analyzer。该核验只验证已保存摘要与指标；未重新推理特征/稠密图，不能将数值通过当作创新性、总体等风险或独立确认成立。旧三个科学门维持失败。精确命令、输入SHA及全部范围见同名JSON。\n"
+    (OUT/'independent_verification.md').write_text(report,encoding='utf-8')
+    print(json.dumps({'status':output['status'],'checks':len(CHECKS),'decision':output['recomputed_decision'],'resource':output['resource']},ensure_ascii=False))
+
+
+def digest_bytes(array):
+    return hashlib.sha256(array.tobytes(order='C')).hexdigest()
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        stamp=datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        failure={'status':'INDEPENDENT_VERIFICATION_FAILED','checks_before_failure':len(CHECKS),'last_check':CHECKS[-1] if CHECKS else None,'error_type':type(error).__name__,'error':str(error),'traceback':traceback.format_exc(),'verifier_sha256':digest(__file__)}
+        (OUT/('independent_verification_failure_'+stamp+'.json')).write_text(json.dumps(failure,indent=2,ensure_ascii=False),encoding='utf-8')
+        raise

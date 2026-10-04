@@ -1,0 +1,267 @@
+{
+  "results_sha256": "31ecd8ad0a78a71025f2862adca33c0ecdf1e7d495c7ed126b19bd6a07b740fe",
+  "figure1_phase_rows": [
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 0,
+      "endpoint": "log_odd_over_balanced:full",
+      "point": 0.07660672369742116,
+      "bootstrap_mean": 0.0766634041753104,
+      "bootstrap_median": 0.0765619310146253,
+      "ci95": [
+        0.060470154458852406,
+        0.09311222020321096
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 0,
+      "endpoint": "log_odd_over_balanced:parity00",
+      "point": 0.005772824262754471,
+      "bootstrap_mean": 0.005725110616522247,
+      "bootstrap_median": 0.005693756959694908,
+      "ci95": [
+        -0.005605672865607122,
+        0.017262258949162227
+      ],
+      "fraction_positive": 0.8376,
+      "fraction_nonnegative": 0.8376
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 0,
+      "endpoint": "log_odd_over_balanced:parity01",
+      "point": 0.09999531406859552,
+      "bootstrap_mean": 0.09989746595958753,
+      "bootstrap_median": 0.09959969379688846,
+      "ci95": [
+        0.08229585377482089,
+        0.11829973919319817
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 0,
+      "endpoint": "log_odd_over_balanced:parity10",
+      "point": 0.016969750124329906,
+      "bootstrap_mean": 0.016913394002579303,
+      "bootstrap_median": 0.016881413206308045,
+      "ci95": [
+        0.0021394732210239962,
+        0.03198966201310894
+      ],
+      "fraction_positive": 0.9874,
+      "fraction_nonnegative": 0.9874
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 0,
+      "endpoint": "log_odd_over_balanced:parity11",
+      "point": -0.017826892373081427,
+      "bootstrap_mean": -0.017807852820497377,
+      "bootstrap_median": -0.017749198601447663,
+      "ci95": [
+        -0.029948874113884076,
+        -0.005263265673277384
+      ],
+      "fraction_positive": 0.003,
+      "fraction_nonnegative": 0.003
+    }
+  ],
+  "figure1_interaction_rows": [
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 0,
+      "endpoint": "full_minus_parity11",
+      "point": 0.09443361607050256,
+      "bootstrap_mean": 0.09447125699580779,
+      "bootstrap_median": 0.09433741935088052,
+      "ci95": [
+        0.07719549112003052,
+        0.11175671397533407
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 1,
+      "endpoint": "full_minus_parity11",
+      "point": 0.11224644993914168,
+      "bootstrap_mean": 0.11228078062964582,
+      "bootstrap_median": 0.11213751358988588,
+      "ci95": [
+        0.09661689778454512,
+        0.12902327537758604
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 2,
+      "endpoint": "full_minus_parity11",
+      "point": 0.11929983991553622,
+      "bootstrap_mean": 0.11941818647540982,
+      "bootstrap_median": 0.11928290041378531,
+      "ci95": [
+        0.10214662564696576,
+        0.1373960059532119
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 0,
+      "endpoint": "full_minus_interior_parity11",
+      "point": 0.09235436246436451,
+      "bootstrap_mean": 0.09236472843192485,
+      "bootstrap_median": 0.0921410442407592,
+      "ci95": [
+        0.0749943562469233,
+        0.11019448573645448
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 1,
+      "endpoint": "full_minus_interior_parity11",
+      "point": 0.1118678822333403,
+      "bootstrap_mean": 0.11190079944960385,
+      "bootstrap_median": 0.11183535736636935,
+      "ci95": [
+        0.09595269108512677,
+        0.12854235339139838
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": 2,
+      "endpoint": "full_minus_interior_parity11",
+      "point": 0.11806944312913666,
+      "bootstrap_mean": 0.11817542453614364,
+      "bootstrap_median": 0.11813060345359538,
+      "ci95": [
+        0.10071188811999965,
+        0.1364816648252948
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    }
+  ],
+  "figure2_rows": [
+    {
+      "study": "p1",
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "supported_group_tpr",
+      "point": 0.573208722741433,
+      "bootstrap_mean": 0.5739601246105918,
+      "bootstrap_median": 0.5763239875389408,
+      "ci95": [
+        0.48909657320872274,
+        0.6542056074766355
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "study": "p1",
+      "candidate": "balanced",
+      "reference": "odd",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "supported_group_tpr",
+      "point": 0.573208722741433,
+      "bootstrap_mean": 0.576981308411215,
+      "bootstrap_median": 0.5919003115264797,
+      "ci95": [
+        0.30218068535825543,
+        0.7601246105919003
+      ],
+      "fraction_positive": 1.0,
+      "fraction_nonnegative": 1.0
+    },
+    {
+      "study": "p1",
+      "candidate": "random",
+      "reference": "balanced",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "supported_group_tpr",
+      "point": -0.06230529595015577,
+      "bootstrap_mean": -0.06234143302180687,
+      "bootstrap_median": -0.06230529595015577,
+      "ci95": [
+        -0.12461059190031154,
+        -0.0031152647975077885
+      ],
+      "fraction_positive": 0.0186,
+      "fraction_nonnegative": 0.0216
+    },
+    {
+      "study": "p1",
+      "candidate": "random",
+      "reference": "balanced",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "supported_group_tpr",
+      "point": -0.06230529595015577,
+      "bootstrap_mean": -0.09946230529595015,
+      "bootstrap_median": -0.09034267912772585,
+      "ci95": [
+        -0.24922118380062308,
+        0.009345794392523366
+      ],
+      "fraction_positive": 0.038,
+      "fraction_nonnegative": 0.0426
+    },
+    {
+      "study": "e",
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.13084112149532712,
+      "lower": -0.20560747663551404,
+      "upper": -0.05919003115264796
+    },
+    {
+      "study": "e",
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.13084112149532712,
+      "lower": -0.2523364485981308,
+      "upper": 0.08411214953271029
+    }
+  ],
+  "interval_scope": "Conditional pointwise 95% paired group-bootstrap percentile intervals; fixed coreset seeds are not independent data samples.",
+  "boundary_scope": "Only the interior-phase-11 side excludes the boundary. The full-grid reference retains boundary queries.",
+  "transfer_scope": "E is a separate 20,000-candidate rule transfer, not an external replication of the phase interaction."
+}

@@ -1,0 +1,52 @@
+REAL-IAD-DERIVED RESEARCH DATA NOTICE
+
+License identifier: CC-BY-NC-SA-4.0
+License name: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+Standard license: https://creativecommons.org/licenses/by-nc-sa/4.0/
+Legal text: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+This is a scope and attribution notice, not a replacement for the standard
+license text. The upstream official Real-IAD dataset card identifies this
+license and research use:
+https://huggingface.co/datasets/Real-IAD/Real-IAD
+Project website: https://realiad4ad.github.io/Real-IAD/
+License identification checked 4 October 2026.
+
+ATTRIBUTION
+
+Real-IAD: A Real-World Multi-View Dataset for Benchmarking Versatile Industrial
+Anomaly Detection. Chengjie Wang, Wenbing Zhu, Bin-Bin Gao, Zhenye Gan,
+Jiangning Zhang, Zhihao Gu, Shuguang Qian, Mingang Chen, and Lizhuang Ma.
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 2024, pages 22883-22892.
+https://openaccess.thecvf.com/content/CVPR2024/html/Wang_Real-IAD_A_Real-World_Multi-View_Dataset_for_Benchmarking_Versatile_Industrial_Anomaly_CVPR_2024_paper.html
+
+SCOPE
+
+The tables in data/manifests and data/derived are a research subset and
+transformation of the existing Real-IAD case-study records. Dataset-relative
+image identifiers, acquisition-group identifiers, camera identifiers and
+official anomaly annotations refer to Real-IAD and retain the applicable
+upstream CC-BY-NC-SA-4.0 terms. They are not original software licensed under
+MIT or Apache-2.0.
+
+The study adds fitting/calibration/development role assignments, candidate
+and prototype identities, scalar predictions, regional score summaries,
+matching diagnostics and aggregate statistical results. These are identified
+as study-generated additions to this derived research-data package. To the
+extent copyright or database rights apply to the adapted tables supplied
+here, this package is distributed under CC-BY-NC-SA-4.0. This notice does not
+claim new ownership over individual numerical facts or expand the upstream
+licensor's rights.
+
+The data tables are not the original complete dataset or its original label
+archive. No source image, mask, dense feature/map, model checkpoint or reserved
+confirmation-set record is included. Obtain the source assets directly from
+the official host and comply with its access conditions. Publication of this
+derived subset does not waive those conditions or grant access to gated files.
+
+Retain attribution and license identification, identify further changes, and
+consult the linked standard license for its noncommercial and share-alike
+conditions. No upstream endorsement is implied. This notice applies to this
+data package only; original software licensing is described separately in
+../LICENSE_STATUS.md and upstream software in ../THIRD_PARTY_NOTICES.md.

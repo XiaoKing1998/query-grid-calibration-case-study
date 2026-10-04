@@ -1,0 +1,419 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Independent scalar reconstruction. No producer/analyzer imports or image I/O.
+
+The scientific command requires a frozen producer and explicit prior CPU wall
+accounting. --self-test uses synthetic scalars only. A later comparison step
+may read the root analyzer's outputs; reconstruction does not depend on them.
+"""
+from collections import Counter, defaultdict
+from pathlib import Path
+import argparse
+import csv
+import ctypes
+import hashlib
+import json
+import math
+import sys
+import time
+import zipfile
+
+IMPORT_STARTED = time.perf_counter()
+import numpy as np
+from scipy.stats import beta
+
+sys.dont_write_bytecode = True
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+RUN = ROOT / 'runner'
+REPO = Path('${PROJECT_ROOT}')
+METADATA = REPO / 'artifacts/ram_ad_20260918/realiad_metadata_admission/realiad_jsons.zip'
+IDENTITY = ('category', 'path', 'group_key', 'camera', 'research_role')
+POOLS = ('native', 'uniform', 'native_shuffle')
+METHODS = tuple(f'{p}_s{s}' for p in POOLS for s in range(3))
+PAIRS = (('uniform', 'native'), ('native_shuffle', 'native'), ('uniform', 'native_shuffle'))
+METRICS = ('normal_group_fpr', 'supported_group_tpr', 'any_group_tpr')
+REGIMES = ('fixed_calibration', 'calibration_only', 'joint')
+
+
+def read_json(path):
+    return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+
+
+def read_csv(path):
+    with Path(path).open(encoding='utf-8-sig', newline='') as stream:
+        return list(csv.DictReader(stream))
+
+
+def digest(path):
+    h = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for data in iter(lambda: stream.read(4 * 1024**2), b''):
+            h.update(data)
+    return h.hexdigest()
+
+
+def array_digest(values):
+    return hashlib.sha256(np.asarray(values, dtype='<i8').tobytes()).hexdigest()
+
+
+def peak_memory():
+    if sys.platform != 'win32':
+        raise RuntimeError('This receipt requires native Windows peak memory')
+    class Memory(ctypes.Structure):
+        _fields_ = [('cb', ctypes.c_ulong), ('faults', ctypes.c_ulong)] + [
+            (name, ctypes.c_size_t) for name in ('peak', 'working', 'qpp', 'qpc', 'qnp', 'qnc', 'page', 'peak_page')]
+    m = Memory()
+    m.cb = ctypes.sizeof(m)
+    kernel = ctypes.WinDLL('kernel32')
+    kernel.GetCurrentProcess.restype = ctypes.c_void_p
+    psapi = ctypes.WinDLL('psapi')
+    psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong]
+    if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(m), m.cb):
+        raise OSError('Native process memory receipt unavailable')
+    return int(m.peak)
+
+
+class Audit:
+    def __init__(self, prior, limit=600.):
+        self.started = IMPORT_STARTED
+        self.cpu_started = time.process_time()
+        self.prior = float(prior)
+        self.limit = float(limit)
+        self.names = []
+        self.check('prior_resource_finite_nonnegative', math.isfinite(self.prior) and 0 <= self.prior < limit)
+
+    def check(self, name, condition):
+        if not bool(condition):
+            raise AssertionError(name)
+        self.names.append(name)
+        if time.perf_counter() - self.started + self.prior >= self.limit:
+            raise TimeoutError('Shared other-CPU wall budget exhausted')
+
+    def finish(self, payload, filename):
+        rss = peak_memory()
+        self.check('native_peak_rss_within_limit', 0 < rss <= 20 * 1024**3)
+        wall = time.perf_counter() - self.started
+        payload.update(check_count=len(self.names), failed=0,
+                       check_names_sha256=hashlib.sha256('\n'.join(self.names).encode()).hexdigest(),
+                       resource={'prior_other_cpu_wall_seconds': self.prior, 'wall_seconds': wall,
+                                 'process_cpu_seconds': time.process_time() - self.cpu_started,
+                                 'cumulative_other_cpu_wall_seconds': self.prior + wall,
+                                 'limit_other_cpu_wall_seconds': self.limit, 'peak_rss_bytes': rss},
+                       verifier_sha256=digest(__file__), new_pixels=0, gpu=0,
+                       confirmation_access=0, masks_requested=0)
+        with (HERE / filename).open('x', encoding='utf-8', newline='\n') as stream:
+            json.dump(payload, stream, indent=2, ensure_ascii=False, allow_nan=False)
+            stream.write('\n')
+        return payload
+
+
+def ci95(values):
+    ordered = np.sort(np.asarray(values, dtype=np.float64))
+    answer = []
+    for q in (.025, .975):
+        index = q * (len(ordered) - 1)
+        left = int(math.floor(index))
+        right = int(math.ceil(index))
+        answer.append(float(ordered[left] + (index-left) * (ordered[right]-ordered[left])))
+    return answer
+
+
+def summarize(values, point):
+    return {'point': float(point), 'ci95': ci95(values),
+            'bootstrap_mean': float(np.mean(values)), 'bootstrap_median': float(np.median(values)),
+            'fraction_positive': float(np.mean(values > 0)),
+            'fraction_nonnegative': float(np.mean(values >= 0))}
+
+
+def exact_interval(k, n):
+    return [0.0 if k == 0 else float(beta.ppf(.025, k, n-k+1)),
+            1.0 if k == n else float(beta.ppf(.975, k+1, n-k))]
+
+
+def resampling(cal, normal, supported, any_bad, replicates, seed, rank, audit):
+    """Arrays are methods x groups. Independent per-method reconstruction."""
+    rng = np.random.Generator(np.random.PCG64(seed))
+    dc = rng.integers(0, cal.shape[1], size=(replicates, cal.shape[1]), dtype=np.int64)
+    dn = rng.integers(0, normal.shape[1], size=(replicates, normal.shape[1]), dtype=np.int64)
+    da = rng.integers(0, supported.shape[1], size=(replicates, supported.shape[1]), dtype=np.int64)
+    thresholds = np.sort(cal, axis=1)[:, rank-1]
+    points = np.empty((len(cal), 3), dtype=np.float64)
+    distributions = {r: np.empty((len(cal), replicates, 3), dtype=np.float64) for r in REGIMES}
+    bootstrap_thresholds = np.empty((len(cal), replicates), dtype=np.float64)
+    for method in range(len(cal)):
+        sampled_tau = np.sort(cal[method][dc], axis=1)[:, rank-1]
+        bootstrap_thresholds[method] = sampled_tau
+        for metric, (scores, draw) in enumerate(((normal[method], dn), (supported[method], da), (any_bad[method], da))):
+            positive = scores > thresholds[method]
+            points[method, metric] = np.count_nonzero(positive) / len(scores)
+            distributions['fixed_calibration'][method, :, metric] = positive[draw].mean(axis=1)
+            distributions['calibration_only'][method, :, metric] = (scores[None, :] > sampled_tau[:, None]).mean(axis=1)
+            distributions['joint'][method, :, metric] = (scores[draw] > sampled_tau[:, None]).mean(axis=1)
+        audit.check('resampled_finite_method_' + str(method), all(np.isfinite(v[method]).all() for v in distributions.values()))
+    return thresholds, points, distributions, bootstrap_thresholds, (dc, dn, da)
+
+
+def frozen_inputs(audit, allowlist):
+    plan = read_json(ROOT / 'plan.json')
+    audit.check('plan_methods', tuple(plan['methods']) == METHODS)
+    audit.check('plan_bootstrap', plan['uncertainty']['seed'] == 20261104 and plan['uncertainty']['bootstrap_replicates'] == 5000)
+    audit.check('plan_input_roles', plan['input_roles'] == {'source_fit': 875, 'source_calibration': 380, 'development': 755})
+    audit.check('plan_no_confirmation_masks', plan['confirmation_pixels_and_scores'] == plan['masks_requested'] == 0)
+    freeze = read_json(RUN / 'prediction_freeze.json')
+    audit.check('prediction_status', freeze['status'] == 'EXTERNAL_SAMPLING_PREDICTIONS_FROZEN')
+    audit.check('plan_binding', freeze['plan_sha256'] == digest(ROOT / 'plan.json'))
+    audit.check('producer_binding', freeze['producer_sha256'] == digest(RUN / 'run_external_sampling.py'))
+    audit.check('admission_binding', freeze['admission_sha256'] == digest(ROOT / 'admission.json'))
+    audit.check('candidate_metadata_binding', freeze['candidate_metadata_sha256'] == digest(RUN / 'candidate_metadata.json'))
+    audit.check('freeze_methods_and_counts', tuple(freeze['methods']) == METHODS and freeze['counts'] == plan['input_roles'])
+    audit.check('freeze_scope', freeze['before_development_labels'] is True and freeze['confirmation_access'] == 0 and freeze['masks_requested'] == 0 and freeze['payload_saved'] is False)
+    audit.check('freeze_query_counts', freeze['query_rows'] == 1135 and freeze['query_cells'] == 4096 and freeze['fit_embedded_images'] == 875 and freeze['candidate_count_each'] == 20000)
+    for filename, expected in freeze['sha256_files'].items():
+        audit.check('safe_frozen_file_' + filename, Path(filename).name == filename)
+        audit.check('freeze_hash_' + filename, digest(RUN / filename) == expected)
+    resources = read_json(RUN / 'resource_receipt.json')
+    supervisor = read_json(RUN / 'supervisor.json')
+    audit.check('supervisor_complete', supervisor['exit_code'] == 0 and supervisor['timeout'] is False)
+    audit.check('producer_gpu_budget', resources['total_gpu_wall_seconds'] <= 900)
+    audit.check('producer_wall_budget', supervisor['total_execution_wall_seconds'] <= 1800)
+    audit.check('producer_counts', resources['completed_query_images'] == 1135 and set(resources['completed_banks']) == set(METHODS))
+    audit.check('producer_zero_access', resources['confirmation_access'] == resources['masks_requested'] == 0 and resources['payload_saved'] is False)
+
+    allowed_rows = read_csv(allowlist)
+    audit.check('query_allowlist_shape', len(allowed_rows) == 1135 and set(allowed_rows[0]) == set(IDENTITY))
+    allowed = {r['path']: r for r in allowed_rows}
+    audit.check('query_allowlist_unique', len(allowed) == 1135)
+    audit.check('query_allowlist_roles', Counter(r['research_role'] for r in allowed_rows) == {'source_calibration': 380, 'development': 755})
+    # The root must bind this pure identity file in admission. No all-role manifest is read.
+    admission = read_json(ROOT / 'admission.json')
+    bindings = {str(Path(p).resolve()).casefold(): h for p, h in admission['dependency_hashes'].items()}
+    audit.check('query_allowlist_bound', bindings.get(str(allowlist.resolve()).casefold()) == digest(allowlist))
+    scalar = read_csv(RUN / 'scalar_predictions.csv')
+    audit.check('scalar_columns', set(scalar[0]) == set(IDENTITY + METHODS))
+    audit.check('scalar_count_unique', len(scalar) == len({r['path'] for r in scalar}) == 1135)
+    audit.check('scalar_allowlist_set', {r['path'] for r in scalar} == set(allowed))
+    for row in scalar:
+        audit.check('scalar_identity_' + row['path'], all(row[k] == allowed[row['path']][k] for k in IDENTITY))
+        audit.check('scalar_finite_nonnegative_' + row['path'], all(math.isfinite(float(row[m])) and float(row[m]) >= 0 for m in METHODS))
+    by_path = {r['path']: r for r in scalar}
+    peaks = read_csv(RUN / 'peak_statistics.csv')
+    audit.check('peaks_complete', len(peaks) == len({(r['path'], r['method']) for r in peaks}) == 1135*9)
+    for row in peaks:
+        path, method = row['path'], row['method']
+        audit.check('peak_identity_' + method + path, path in allowed and method in METHODS and all(row[k] == allowed[path][k] for k in IDENTITY))
+        audit.check('peak_score_' + method + path, float(row['max']) == float(by_path[path][method]))
+        audit.check('peak_geometry_' + method + path, int(row['evaluated_query_cells']) == 4096 and 0 <= int(row['argmax_row']) < 64 and 0 <= int(row['argmax_col']) < 64 and 1 <= int(row['image_max_tie_count']) <= 4096)
+
+    normal_rows = read_csv(RUN / 'normal_statistics.csv')
+    audit.check('normal_statistics_complete', len(normal_rows) == len({(r['method'],r['path']) for r in normal_rows}) == 380*9)
+    for row in normal_rows:
+        path, method = row['path'], row['method']
+        audit.check('normal_statistics_identity_' + method + path, path in allowed and method in METHODS and allowed[path]['research_role']=='source_calibration' and all(row[k]==allowed[path][k] for k in IDENTITY))
+        mean, percentile, maximum = [float(row[k]) for k in ('mean_squared_nearest','p95_squared_nearest','max_squared_nearest')]
+        audit.check('normal_statistics_bounds_' + method + path, all(math.isfinite(v) for v in (mean,percentile,maximum)) and 0<=mean<=maximum and 0<=percentile<=maximum and maximum==float(by_path[path][method]))
+    normal_camera = []
+    for method in METHODS:
+        for camera in ('1','2','3','4','5'):
+            data = [r for r in normal_rows if r['method']==method and r['camera']==camera]
+            audit.check('camera_normal_count_' + method + camera, len(data)==76)
+            normal_camera.append({'method':method,'camera':camera,'n_images':76,
+                                  **{key:math.fsum(float(r[key]) for r in data)/76 for key in ('mean_squared_nearest','p95_squared_nearest','max_squared_nearest')}})
+
+    meta = read_json(RUN / 'candidate_metadata.json')
+    for filename, expected in meta['sha256_files'].items():
+        audit.check('candidate_file_' + filename, digest(RUN / filename) == expected)
+    candidates = read_csv(RUN / 'candidate_identities.csv')
+    candidate_map = {(r['construction'], int(r['candidate_index'])): r for r in candidates}
+    audit.check('candidate_map_complete', len(candidates) == len(candidate_map) == 60000)
+    banks = read_csv(RUN / 'bank_identities.csv')
+    audit.check('bank_rows', len(banks) == 4096*9)
+    bank_summary = []
+    for method in METHODS:
+        construction, seed = method.rsplit('_s', 1)
+        entries = sorted((r for r in banks if r['method'] == method), key=lambda r: int(r['prototype']))
+        audit.check('bank_prototype_order_' + method, [int(r['prototype']) for r in entries] == list(range(4096)))
+        audit.check('bank_unique_' + method, len({int(r['global_patch_id']) for r in entries}) == 4096)
+        for row in entries:
+            candidate = candidate_map[construction, int(row['candidate_index'])]
+            fields = ('global_patch_id', 'source_index', 'path', 'group_key', 'camera', 'row', 'col')
+            audit.check('bank_identity_' + method + row['prototype'], row['construction'] == construction and row['seed'] == seed and all(row[k] == candidate[k] for k in fields))
+        bank_summary.append({'method': method, 'prototypes': len(entries), 'source_images': len({r['path'] for r in entries}),
+                             'source_groups': len({r['group_key'] for r in entries}),
+                             'camera_counts': dict(Counter(r['camera'] for r in entries)),
+                             'phase_counts': dict(Counter(str(int(r['row']) % 2)+str(int(r['col']) % 2) for r in entries))})
+    return plan, scalar, bank_summary, normal_camera, {'prediction_freeze': digest(RUN / 'prediction_freeze.json'),
+                                      'plan': digest(ROOT / 'plan.json'), 'query_allowlist': digest(allowlist),
+                                      'scalar': digest(RUN / 'scalar_predictions.csv'), 'official_metadata': digest(METADATA)}
+
+
+def grouped_inputs(scalar, audit):
+    paths = {r['path']: r for r in scalar}
+    # Whitelist first: no unadmitted labels retained, no mask member opened.
+    with zipfile.ZipFile(METADATA) as archive:
+        official = json.loads(archive.read('realiad_jsons/plastic_nut.json'))
+    labels = {}
+    prefix = official['meta']['prefix'].rstrip('/')
+    for split in ('train', 'test'):
+        for item in official[split]:
+            path = prefix + '/' + item['image_path'].lstrip('/')
+            if path not in paths:
+                continue
+            audit.check('label_unique_' + path, path not in labels)
+            audit.check('label_official_split_' + path, split == ('train' if paths[path]['research_role'] == 'source_calibration' else 'test'))
+            labels[path] = item['anomaly_class'] != 'OK'
+    del official
+    audit.check('labels_complete', set(labels) == set(paths))
+    audit.check('abnormal_views', sum(labels.values()) == 258)
+    grouped = defaultdict(list)
+    for row in scalar:
+        grouped[row['group_key']].append(row)
+    for key, rows in grouped.items():
+        audit.check('five_views_' + key, len(rows) == 5 and {r['camera'] for r in rows} == {'1','2','3','4','5'})
+        audit.check('one_role_' + key, len({r['research_role'] for r in rows}) == 1)
+    cal_keys, normal_keys, bad_keys = [], [], []
+    for key in sorted(grouped):
+        rs = grouped[key]
+        abnormal = any(labels[r['path']] for r in rs)
+        if rs[0]['research_role'] == 'source_calibration':
+            audit.check('calibration_is_normal_' + key, not abnormal)
+            cal_keys.append(key)
+        elif abnormal:
+            bad_keys.append(key)
+        else:
+            normal_keys.append(key)
+    audit.check('group_strata', (len(cal_keys), len(normal_keys), len(bad_keys)) == (76,44,107))
+    def maxima(keys, only_bad=False):
+        return np.array([[max(float(row[method]) for row in grouped[key] if not only_bad or labels[row['path']])
+                          for key in keys] for method in METHODS], dtype=np.float64)
+    return maxima(cal_keys), maxima(normal_keys), maxima(bad_keys, True), maxima(bad_keys), grouped, (cal_keys, normal_keys, bad_keys)
+
+
+def reconstruct(scalar, audit):
+    cal, normal, supported, any_bad, grouped, keys = grouped_inputs(scalar, audit)
+    tau, point, boot, boot_tau, draws = resampling(cal, normal, supported, any_bad, 5000, 20261104, 74, audit)
+    operating, method_intervals = [], []
+    for m, method in enumerate(METHODS):
+        fp, tp, ap = [int(np.count_nonzero(x[m] > tau[m])) for x in (normal, supported, any_bad)]
+        operating.append({'method': method, 'threshold': float(tau[m]), 'normal_groups': 44, 'abnormal_groups':107,
+                          'normal_false_positive_groups': fp, 'supported_detected_groups': tp, 'any_detected_groups': ap,
+                          'normal_group_fpr': fp/44, 'supported_group_tpr': tp/107, 'any_group_tpr':ap/107,
+                          'normal_group_fpr_exact_ci95': exact_interval(fp,44)})
+        for regime in REGIMES:
+            for metric, metric_name in enumerate(METRICS):
+                method_intervals.append({'method':method, 'regime':regime, 'metric':metric_name,
+                                         **summarize(boot[regime][m,:,metric], point[m,metric])})
+    contrasts = []
+    for candidate, reference in PAIRS:
+        im = [METHODS.index(f'{candidate}_s{s}') for s in range(3)]
+        ir = [METHODS.index(f'{reference}_s{s}') for s in range(3)]
+        delta = point[im] - point[ir]
+        for regime in REGIMES:
+            changes = boot[regime][im] - boot[regime][ir]
+            for s in (0,1,2,'fixed_seed_mean'):
+                values = changes.mean(axis=0) if isinstance(s,str) else changes[s]
+                p = delta.mean(axis=0) if isinstance(s,str) else delta[s]
+                for metric, name in enumerate(METRICS):
+                    contrasts.append({'candidate':candidate, 'reference':reference, 'seed':s,
+                                      'regime':regime, 'metric':name, **summarize(values[:,metric], p[metric])})
+    cross = []
+    for seed in range(3):
+        for score_pool in POOLS:
+            sm = f'{score_pool}_s{seed}'
+            i = METHODS.index(sm)
+            for threshold_pool in POOLS:
+                tm = f'{threshold_pool}_s{seed}'
+                t = float(tau[METHODS.index(tm)])
+                fp, tp, ap = [int(np.count_nonzero(x[i] > t)) for x in (normal,supported,any_bad)]
+                cross.append({'seed':seed, 'score_method':sm, 'threshold_method':tm, 'threshold':t,
+                              'normal_false_positive_groups':fp, 'supported_detected_groups':tp,
+                              'any_detected_groups':ap, 'normal_groups':44, 'abnormal_groups':107,
+                              'normal_group_fpr':fp/44, 'supported_group_tpr':tp/107, 'any_group_tpr':ap/107})
+    log_values = []
+    for seed in range(3):
+        ng, ug = f'native_s{seed}', f'uniform_s{seed}'
+        v = []
+        for key in keys[0]:
+            ratios = [(float(r[ng]),float(r[ug])) for r in grouped[key]]
+            audit.check('positive_for_log_' + str(seed) + key, all(a>0 and b>0 for a,b in ratios))
+            v.append(sum(math.log(a/b) for a,b in ratios)/5)
+        log_values.append(v)
+    log_values = np.array(log_values)
+    log_stats = []
+    for seed in (0,1,2,'fixed_seed_mean'):
+        data = log_values.mean(axis=0) if isinstance(seed,str) else log_values[seed]
+        log_stats.append({'seed':seed, **summarize(data[draws[0]].mean(axis=1), data.mean())})
+    deltas = [point[METHODS.index(f'uniform_s{s}'),1]-point[METHODS.index(f'native_s{s}'),1] for s in range(3)]
+    main = next(r for r in contrasts if r['candidate']=='uniform' and r['reference']=='native' and r['seed']=='fixed_seed_mean' and r['regime']=='joint' and r['metric']=='supported_group_tpr')
+    fp_extra = [operating[METHODS.index(f'uniform_s{s}')]['normal_false_positive_groups']-operating[METHODS.index(f'native_s{s}')]['normal_false_positive_groups'] for s in range(3)]
+    gates = {'each_seed_delta_at_least_10pp': [bool(x>=.10) for x in deltas], 'each_seed_delta_supported_tpr':list(map(float,deltas)),
+             'joint_fixed_seed_mean_ci_lower_positive':bool(main['ci95'][0]>0),
+             'primary_operational_gate_pass':bool(all(x>=.10 for x in deltas) and main['ci95'][0]>0),
+             'additional_fp_groups_by_seed':fp_extra, 'descriptive_risk_point_screen_pass':all(x<=1 for x in fp_extra)}
+    audit.check('complete_operating_and_cross', len(operating)==9 and len(cross)==27)
+    audit.check('all_supported_no_greater_than_any', all(r['supported_detected_groups']<=r['any_detected_groups'] for r in operating+cross))
+    group_scores = [{'population':population,'group_key':key,**{method:float(array[j,i]) for j,method in enumerate(METHODS)}}
+                    for population,gkeys,array in (('calibration',keys[0],cal),('normal_development',keys[1],normal),('supported_development',keys[2],supported),('any_development',keys[2],any_bad)) for i,key in enumerate(gkeys)]
+    return {'group_counts':{'calibration':76,'normal_development':44,'abnormal_development':107},
+            'group_key_sha256':{name:hashlib.sha256('\n'.join(k).encode()).hexdigest() for name,k in zip(('calibration','normal','abnormal'),keys)},
+            'bootstrap':{'replicates':5000,'seed':20261104,'allocation_order':['calibration','normal','abnormal'],
+                         'draw_sha256_le_i8':dict(zip(('calibration','normal','abnormal'),map(array_digest,draws)))},
+            'operating_points':operating, 'method_intervals':method_intervals, 'paired_contrasts':contrasts,
+            'threshold_cross':cross, 'normal_log_native_over_uniform':log_stats, 'group_scores':group_scores,
+            'threshold_distributions':[{'method':m, **summarize(boot_tau[i], tau[i])} for i,m in enumerate(METHODS)],
+            'gates':gates}
+
+
+def self_test(audit):
+    # Same-order statistics with different score scales must preserve own-threshold alarms.
+    base = np.arange(1.,77.)
+    cal = np.vstack((base,base*3))
+    normal = np.vstack((np.array([73.,74.,75.,80.]),np.array([73.,74.,75.,80.])*3))
+    supported = np.vstack((np.array([72.,75.,90.]),np.array([72.,75.,90.])*3))
+    any_bad = supported + np.array([[5.],[15.]])
+    tau, point, boot, bt, draws = resampling(cal,normal,supported,any_bad,23,12345,74,audit)
+    audit.check('synthetic_rank', np.array_equal(tau,[74.,222.]))
+    audit.check('synthetic_strict_greater', point[0,0] == .5)
+    audit.check('synthetic_supported_vs_any', point[0,1] < point[0,2])
+    audit.check('synthetic_scale_point_invariance', np.array_equal(point[0],point[1]))
+    for regime in REGIMES:
+        audit.check('synthetic_scale_bootstrap_' + regime, np.array_equal(boot[regime][0],boot[regime][1]))
+    for b in range(23):
+        threshold = sorted(cal[0,draws[0][b]].tolist())[73]
+        for metric,(values,d) in enumerate(((normal[0],draws[1]),(supported[0],draws[2]),(any_bad[0],draws[2]))):
+            direct = sum(values[i] > threshold for i in d[b]) / len(d[b])
+            audit.check('synthetic_scalar_loop_' + str(b)+'_'+str(metric), direct==boot['joint'][0,b,metric])
+    audit.check('synthetic_percentile', ci95(np.arange(101.)) == [2.5,97.5])
+    audit.check('synthetic_cp_zero', abs(exact_interval(0,44)[1]-(1-.025**(1/44)))<1e-14)
+    audit.check('synthetic_cp_all', abs(exact_interval(44,44)[0]-.025**(1/44))<1e-14)
+    audit.check('synthetic_cp_symmetry', np.allclose(exact_interval(1,44),1-np.array(exact_interval(43,44))[::-1],rtol=0,atol=1e-14))
+    return audit.finish({'status':'PASS_SYNTHETIC_SELF_TEST_ONLY','science_data_read':False},'selftest.json')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument('--self-test',action='store_true')
+    modes.add_argument('--verify',action='store_true')
+    parser.add_argument('--prior-cpu-seconds',required=True,type=float)
+    parser.add_argument('--allowlist',type=Path,default=ROOT/'query_identities.csv')
+    args = parser.parse_args()
+    audit = Audit(args.prior_cpu_seconds)
+    if args.self_test:
+        result = self_test(audit)
+    else:
+        plan, scalar, bank_summary, normal_camera, hashes = frozen_inputs(audit,args.allowlist)
+        result = reconstruct(scalar,audit)
+        result.update(status='PASS_INDEPENDENT_RECONSTRUCTION_PENDING_ANALYZER_COMPARISON',input_sha256=hashes,
+                      bank_identity_summary=bank_summary, normal_camera_summary=normal_camera,
+                      limitations=['Saved scalars independently aggregated; distances/features not recomputed.',
+                                   'Fixed candidate pools and fixed coreset seeds; no independent confirmation.',
+                                   'Supported detection is an abnormal-view alarm, not localization.',
+                                   'Primary TPR gate does not certify equal risk or detection improvement.'])
+        result = audit.finish(result,'independent_result.json')
+    print(json.dumps({'status':result['status'],'checks':result['check_count'],'resource':result['resource']}))
+
+
+if __name__ == '__main__':
+    main()

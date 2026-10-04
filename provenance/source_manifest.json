@@ -1,0 +1,665 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-04T03:17:30.852124+00:00",
+  "scope": "explicit historical code allowlist only",
+  "source_aliases": {
+    "U": "contribution_upgrade_20261003",
+    "E": "external_sampling_20261003",
+    "Y": "innovation_loop_20261003_session02/query_support_attempt01",
+    "X": "innovation_loop_20261003_session02/spatial_support_attempt01",
+    "B": "innovation_loop_20261003_session01/bank_coverage_attempt01",
+    "S": "project artifacts/ram_ad_20260918",
+    "H": "industrial_ad_20261003_realiad_local_evidence"
+  },
+  "files": [
+    {
+      "source_id": "U/p1/runner_draft.py",
+      "release_path": "provenance/archive/U/p1/runner_draft.py.txt",
+      "original_sha256": "7903f05d891d681027f0319c5f12e58323840e82943ab505c2b08d9d4bf6859c",
+      "original_bytes": 22544,
+      "release_sha256": "fd6482e3f44d54dd2d1d904a89eda6194b20add22a8b89332e9132ee9be821fd",
+      "release_bytes": 22755,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 2
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${USER_HOME}",
+          "source_prefix_sha256": "7e74c56459aa00a3ad79e000877c698f26fbfffb81c98204f2f3c28e5af76b97",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "U/p1/analyze_p1.py",
+      "release_path": "provenance/archive/U/p1/analyze_p1.py.txt",
+      "original_sha256": "f711d92095a0ef8a3b64d6a2dfb1bfea14df3d798dc0b569fad8292ad46eed3d",
+      "original_bytes": 35735,
+      "release_sha256": "142681fc2f58bbe245f781580b018b0a62d6c6a2126e09158d608444cf45f2a0",
+      "release_bytes": 35946,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "U/p1/verify_p1.py",
+      "release_path": "provenance/archive/U/p1/verify_p1.py.txt",
+      "original_sha256": "a011afb1475791a1ea0fe2fc2918619855183b9a8a03aa68faca90124034cc1e",
+      "original_bytes": 29797,
+      "release_sha256": "a623fff7f8c9c2660bbc92d29b123a2313b9a25b217fff6346c7899b0b4ea19e",
+      "release_bytes": 30008,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "U/p1/producer_selftest.py",
+      "release_path": "provenance/archive/U/p1/producer_selftest.py.txt",
+      "original_sha256": "1e23682b1ce74b9e02de37e3e270e667e7baa3c3f750cd5c444386c8dfb7a23b",
+      "original_bytes": 2623,
+      "release_sha256": "a7c2db65c97175f0be9746f0d9a0e214af36ce7918054daec6d4aa035f9932b8",
+      "release_bytes": 2870,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "U/p2/run_p2.py",
+      "release_path": "provenance/archive/U/p2/run_p2.py.txt",
+      "original_sha256": "a4df1ad365ce8630d16bada223fe721ea2496d3f26e6c965f091a69cbb0e9664",
+      "original_bytes": 39822,
+      "release_sha256": "b78601c4ccbc85d2cd0f556c8899cc3e4410439f65b2cc0b97a9a208c5444699",
+      "release_bytes": 40069,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "U/p2/analyze_p2.py",
+      "release_path": "provenance/archive/U/p2/analyze_p2.py.txt",
+      "original_sha256": "2c2faa08ab8eb7678fdc0283bd41698e7831ec1964b38d53938493ecc3860504",
+      "original_bytes": 27112,
+      "release_sha256": "fedb70f081110179354bbd2ca6991de09195aa1d50e9e75f8ee7dabc257aa3f2",
+      "release_bytes": 27322,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "U/p2/verify_p2.py",
+      "release_path": "provenance/archive/U/p2/verify_p2.py.txt",
+      "original_sha256": "7dcea321e50a60064535b189207af2e28a256c3debcf5956235cf73ece9fbc35",
+      "original_bytes": 37898,
+      "release_sha256": "d16e4ef0c29dba007af26b71a2fa61ef61ac12f6f762272dea41075f6d37e52b",
+      "release_bytes": 38145,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "U/p2/producer_selftest.py",
+      "release_path": "provenance/archive/U/p2/producer_selftest.py.txt",
+      "original_sha256": "f8027af495415d322ecf83faf859666820dee08abdc67eaef8b65c9262293244",
+      "original_bytes": 11613,
+      "release_sha256": "e3b6b54583b23aa822d4cf28697bf25ba522270e960f1c30d24b5f841a674627",
+      "release_bytes": 11860,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "E/runner/run_external_sampling.py",
+      "release_path": "provenance/archive/E/runner/run_external_sampling.py.txt",
+      "original_sha256": "cadb0e8d84ce4494056c0c187cc33b81873e8056e3016a8195c958d07e4c424c",
+      "original_bytes": 21775,
+      "release_sha256": "e43dc284e963447530991ba2087ce283329e70ec7c1775cf64a775acb836544b",
+      "release_bytes": 22023,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "E/runner/candidate_plan.py",
+      "release_path": "provenance/archive/E/runner/candidate_plan.py.txt",
+      "original_sha256": "bea0053d6f7835ace5a97cbf2715d8f863729c7e3e5378cb9ff2963ae5f72919",
+      "original_bytes": 7299,
+      "release_sha256": "9d8ecae3239b3233869474e76d7a5925a5e7929cce06c3c0e778bc7267c941b5",
+      "release_bytes": 7509,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "E/analyze_results.py",
+      "release_path": "provenance/archive/E/analyze_results.py.txt",
+      "original_sha256": "d29ccc1d0de5ba50b7a615161734411a90897723e2406de60da9a33c1e36473f",
+      "original_bytes": 10503,
+      "release_sha256": "e1909dc32d1dd5353697e824337eef57f044f0d1c17351e4f153ac17570640f8",
+      "release_bytes": 10713,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "E/verification/verify_results.py",
+      "release_path": "provenance/archive/E/verification/verify_results.py.txt",
+      "original_sha256": "6d80fa42dab14be82f7e0e09ff7d193edea849136df013dcefa18218f6e3a6f8",
+      "original_bytes": 26215,
+      "release_sha256": "28ebf9e724e9683a867659a71e753a9404d0539eb34d2cbe18c260ccfe868523",
+      "release_bytes": 26425,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "E/verification/compare_results.py",
+      "release_path": "provenance/archive/E/verification/compare_results.py.txt",
+      "original_sha256": "ac2bfdb61d5594dfaeb080c3a229eaa0eb28e06b00bf79595375f76282c17c6a",
+      "original_bytes": 8523,
+      "release_sha256": "0aa6d83524ec368b8d33501f042694e44c3abc865d9fa3ec369c83d159f67719",
+      "release_bytes": 8770,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "Y/run_analysis.py",
+      "release_path": "provenance/archive/Y/run_analysis.py.txt",
+      "original_sha256": "73787baf757ec2378125578b928c0eba0b5b78d83c8f8fd8667fb5b602813d80",
+      "original_bytes": 21753,
+      "release_sha256": "d10c70400cbc1985411d5d02ecaa09eb3a109d4c1550b55fe63688c1fe27a901",
+      "release_bytes": 21914,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 2
+        },
+        {
+          "kind": "remaining_resource_disk_path_to_symbolic_placeholder",
+          "placeholder": "${RESOURCE_DISK_ROOT}",
+          "source_prefix_sha256": "fdf77569b24f4d0fdbba89076d8f699ecb951ba54d93f947b40552e105ed581f",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "Y/verify_query_support.py",
+      "release_path": "provenance/archive/Y/verify_query_support.py.txt",
+      "original_sha256": "e27787f8373f808acbed1af5f6ab98115eaca5ccf68bab2bfbd080ced007f117",
+      "original_bytes": 22797,
+      "release_sha256": "800b99e10f3b83f8d5755720d91271f475c383ac01ff72fff8338e02334a3555",
+      "release_bytes": 23007,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "X/run_spatial.py",
+      "release_path": "provenance/archive/X/run_spatial.py.txt",
+      "original_sha256": "6ffa958c4b4fbc44c371d0071258dc7826522ae93c4df39c17a436f7fc4578bc",
+      "original_bytes": 15781,
+      "release_sha256": "3a293e60ddae3ca3699eae01126b8eb804519a4e92db5d9fc9720a3bc224c559",
+      "release_bytes": 15992,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 2
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${USER_HOME}",
+          "source_prefix_sha256": "7e74c56459aa00a3ad79e000877c698f26fbfffb81c98204f2f3c28e5af76b97",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "X/analyze_spatial.py",
+      "release_path": "provenance/archive/X/analyze_spatial.py.txt",
+      "original_sha256": "92a75cdd4781181b215486fa90b0a7c846971a8091959819d986d4506cb68bf4",
+      "original_bytes": 44434,
+      "release_sha256": "8fdceabbed363aa63a383b0d33bce3f464fb1825635a7fb1af7f03fe4b8b4801",
+      "release_bytes": 44644,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${USER_HOME}",
+          "source_prefix_sha256": "7e74c56459aa00a3ad79e000877c698f26fbfffb81c98204f2f3c28e5af76b97",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "X/verify_intervention_static.py",
+      "release_path": "provenance/archive/X/verify_intervention_static.py.txt",
+      "original_sha256": "7813d22a64c2998f881cb943ce135410af89373894cb4c2185851fd4f3ad09a0",
+      "original_bytes": 2494,
+      "release_sha256": "76976c85c3b12ec57ef3d01ec69d75f4ad8d2d13dc9bbc6c811856ea7c4999b3",
+      "release_bytes": 2705,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "437ec143bd46899a2c0c95e4deba0d7a6651fd07a301cdb250256b43c848ea7a",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "0a04d29f4645128c6ac126ea9f7a41742478408c78bf57bf31bb14dddf03df3b",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "X/verify_primary_root.py",
+      "release_path": "provenance/archive/X/verify_primary_root.py.txt",
+      "original_sha256": "540cdc808ba911833953816b634deff317e9b07e3af725032fcca778cce10bc1",
+      "original_bytes": 3126,
+      "release_sha256": "be2fdf46aeeb3f240a2bc0d8d21b90bd7dbf35e7371f72dad4f0933d32af8858",
+      "release_bytes": 3373,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "X/verify_analysis_repair.py",
+      "release_path": "provenance/archive/X/verify_analysis_repair.py.txt",
+      "original_sha256": "0d24f611446dfcd16e00fd0bb8486a69c6261a780f204fbfd6023d6b452eb01b",
+      "original_bytes": 2200,
+      "release_sha256": "01ef5b558fdfa2860a3fcfa96ee6e8dac3109f011442dc994eceda6deadddeef",
+      "release_bytes": 2447,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "B/run_coverage.py",
+      "release_path": "provenance/archive/B/run_coverage.py.txt",
+      "original_sha256": "1ae56c72c66094dd3edf927702ce3c08a3ca7a09fbf84095d6545f35f52eab3f",
+      "original_bytes": 20751,
+      "release_sha256": "b38ea5f6e4b9a0ccfc033a28f9037b907c94f0fdd102b430b2e6d50d5fc26747",
+      "release_bytes": 20812,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${PROJECT_ROOT}",
+          "source_prefix_sha256": "b1243ffa7bc75706df7291a1a663e32a333b62f8282868478dab3300eb89c1f4",
+          "occurrences": 1
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${RESEARCH_WORKSPACE}",
+          "source_prefix_sha256": "85f286bb0e1f129e0841221d544a096d5ed625e6d59c8a8b785538efcb243366",
+          "occurrences": 3
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${USER_HOME}",
+          "source_prefix_sha256": "50d0472ed61b253ab1b5917003eaf23b28e2ca9987a59c23224f4ae1c60cc7b2",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    },
+    {
+      "source_id": "S/static_reference_audit/static_core.py",
+      "release_path": "provenance/archive/S/static_reference_audit/static_core.py.txt",
+      "original_sha256": "9b89e455e589127d507e49f08698f44b0660fc46798ddee104dd1b61d5fcb9c3",
+      "original_bytes": 4800,
+      "release_sha256": "3a7d92fe3d6c26cee3bdfc472a0deaed953bcaa508dabba5f1db036ca8705864",
+      "release_bytes": 5029,
+      "status": "archival_reference_not_executable",
+      "transformations": [
+        {
+          "kind": "reference_header_added",
+          "lines": 3
+        },
+        {
+          "kind": "utf8_without_BOM_and_LF_normalization"
+        },
+        {
+          "kind": "absolute_environment_prefix_to_symbolic_placeholder",
+          "placeholder": "${AD2_DATA_ROOT}",
+          "source_prefix_sha256": "72290851e4877b5162e3c2725000cf39be1a12553e0cd44afef1b69dbdfd7eb3",
+          "occurrences": 1
+        }
+      ],
+      "python_syntax_after_path_replacement": "PASS"
+    }
+  ],
+  "license_files": [
+    {
+      "release_path": "provenance/licenses/patchcore-LICENSE.txt",
+      "sha256": "88046bf22d5b4f4b8cc85079ae6aae5424a3a1999db952ed152828ff325b2c6d",
+      "bytes": 10317,
+      "upstream_url": "https://github.com/amazon-science/patchcore-inspection/blob/fcaa92f124fb1ad74a7acf56726decd4b27cbcad/LICENSE",
+      "status": "unmodified"
+    },
+    {
+      "release_path": "provenance/licenses/patchcore-NOTICE.txt",
+      "sha256": "3b921bdc93d93a9db034684b0b3154f1d4bab94b275be2fe37ccbf6d7f285b66",
+      "bytes": 68,
+      "upstream_url": "https://github.com/amazon-science/patchcore-inspection/blob/fcaa92f124fb1ad74a7acf56726decd4b27cbcad/NOTICE",
+      "status": "unmodified"
+    }
+  ],
+  "referenced_not_copied": [
+    {
+      "source_id": "S/realiad_static_development/static_runner.py",
+      "sha256": "355790de4f2dc937975af7c06c0d4875c9a7bf2c29b8b3beb8d88b12f1154ea8",
+      "bytes": 41994,
+      "copied": false,
+      "reason": "external dependency reference; transport/auth integration excluded"
+    },
+    {
+      "source_id": "S/realiad_static_development/run_matrix.py",
+      "sha256": "a88723ab8fb92143f46737d1f5bfc47a8eeb922b91bcb9fd4550892f9bdb0de2",
+      "bytes": 19468,
+      "copied": false,
+      "reason": "external dependency reference; transport/auth integration excluded"
+    },
+    {
+      "source_id": "S/realiad_static_development/transport.py",
+      "sha256": "54d7ac8f772578b7b4170dd2d2e76c90c20a4c83bc67ecb9cc69b3aa71426efe",
+      "bytes": 8046,
+      "copied": false,
+      "reason": "external dependency reference; transport/auth integration excluded"
+    },
+    {
+      "source_id": "S/realiad_validation_design/range_review/http_range_reader.py",
+      "sha256": "86e76d66a4d90a71b9eb093078ae8298ff6a0ab9033baafc695a6b43c6a06bc5",
+      "bytes": 8230,
+      "copied": false,
+      "reason": "external dependency reference; transport/auth integration excluded"
+    },
+    {
+      "source_id": "S/static_reference_audit/vendor/patchcore-inspection/src/patchcore/sampler.py",
+      "sha256": "04b1e7b2fa64ce17a7718f7d20e026b7384c7486ef99807dd8451ec9340ea799",
+      "bytes": 7152,
+      "copied": false,
+      "reason": "Apache-2.0 dependency implemented separately in release; see third-party notices"
+    },
+    {
+      "source_id": "H/run_round.py",
+      "sha256": "529c4cd6be4e9f34e8adb4796f01fcaf9bbe2878ba34710c10c0a7e1e9d664ed",
+      "bytes": 14800,
+      "copied": false,
+      "reason": "historical transport and local authentication helper not part of public package"
+    }
+  ],
+  "original_path_prefixes_published": false,
+  "raw_datasets_or_model_weights_copied": false,
+  "original_files_modified": false
+}

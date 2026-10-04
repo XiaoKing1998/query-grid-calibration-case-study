@@ -1,0 +1,389 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Independent CPU verifier for frozen parity-readout analysis.
+
+Reconstructs results from source CSVs without importing the analysis producer.
+Only saved calibration/development scalars, metadata and reports are read.
+"""
+from __future__ import annotations
+import argparse
+import collections
+import csv
+import hashlib
+import io
+import json
+import math
+from pathlib import Path
+import sys
+import time
+import zipfile
+import numpy as np
+
+sys.dont_write_bytecode = True
+OUT = Path(__file__).resolve().parent
+X = OUT.parent / 'spatial_support_attempt01'
+OLD = OUT.parent.parent / 'innovation_loop_20261003_session01' / 'bank_coverage_attempt01'
+REPO = Path('${PROJECT_ROOT}')
+INPUTS = REPO / 'artifacts/ram_ad_20260918/realiad_static_development/attempt02/results/plastic_nut/inputs.csv'
+LABELS = REPO / 'artifacts/ram_ad_20260918/realiad_metadata_admission/realiad_jsons.zip'
+BANKS = ['dino_odd_own', 'dino_balanced_own']
+READOUTS = ['full', '00', '01', '10', '11']
+META = ['category', 'path', 'group_key', 'camera', 'research_role']
+ALLOWED = {
+    OUT: {'plan.json', 'run_analysis.py', 'result.json', 'primary_groups.csv', 'thresholds.csv',
+          'secondary.csv', 'threshold_swap.csv', 'group_predictions.csv', 'phase_peak_statistics.csv',
+          'admission.json', 'resource_receipt.json', 'normal_view_contrasts.csv',
+          'failure_v1.json', 'repair_v1.md', 'report.md', 'run_analysis_v1.py'},
+    X: {'prediction_freeze.json', 'supervisor.json', 'final_analysis_status.json', 'analysis_result.json',
+        'spatial_statistics.csv', 'scalar_predictions.csv', 'analysis_group_predictions.csv',
+        'analyze_spatial.py', 'intervention_identities.json'},
+    OLD: {'prediction_freeze.json', 'scalar_predictions.csv', 'new_bank_source_identities.csv'},
+}
+CHECK_COUNTS = collections.Counter()
+FAILURES = []
+CHECK_HASH = hashlib.sha256()
+READS = {}
+
+
+def check(name, ok, detail=None):
+    record = {'check': name, 'pass': bool(ok), 'detail': detail}
+    CHECK_COUNTS[name] += 1
+    CHECK_HASH.update(json.dumps(record, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode() + b'\n')
+    if not ok:
+        FAILURES.append(record)
+        raise ValueError('Independent check failed: ' + name)
+
+
+def raw(path):
+    path = Path(path).resolve()
+    allowed = path in {INPUTS.resolve(), LABELS.resolve()} or path.name in ALLOWED.get(path.parent, set())
+    if not allowed:
+        raise ValueError('Read outside verifier allowlist')
+    value = path.read_bytes()
+    READS[str(path)] = {'sha256': hashlib.sha256(value).hexdigest(), 'bytes': len(value)}
+    return value
+
+
+def js(path):
+    return json.loads(raw(path).decode('utf-8-sig'))
+
+
+def csvrows(path):
+    return list(csv.DictReader(io.StringIO(raw(path).decode('utf-8-sig'))))
+
+
+def dump(name, value):
+    (OUT / name).write_bytes(json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8'))
+
+
+def eq(a, b):
+    return math.isclose(float(a), float(b), rel_tol=1e-12, abs_tol=1e-12)
+
+
+def flag(value):
+    if value in (True, 1, '1', 'True', 'true'):
+        return True
+    if value in (False, 0, '0', 'False', 'false'):
+        return False
+    raise ValueError('Invalid boolean')
+
+
+def grouped(rows):
+    out = collections.defaultdict(list)
+    for r in rows:
+        out[r['group_key']].append(r)
+    for group, rr in out.items():
+        rr.sort(key=lambda r: int(r['camera']))
+        check('five_camera_group', len(rr) == 5 and [int(r['camera']) for r in rr] == [1, 2, 3, 4, 5], group)
+    return dict(sorted(out.items()))
+
+
+def rank_threshold(values):
+    a = sorted(float(v) for v in values)
+    rank = (95 * (len(a) + 1) + 99) // 100
+    if not 1 <= rank <= len(a):
+        raise ValueError('Nonfinite source quantile requested')
+    return rank, a[rank - 1]
+
+
+def percentile(values, probability):
+    a = sorted(float(v) for v in values)
+    h = (len(a) - 1) * probability
+    lo = int(math.floor(h))
+    return a[lo] if h == lo else a[lo] + (h - lo) * (a[lo + 1] - a[lo])
+
+
+def boot(values, draw):
+    values = np.asarray(values, float)
+    samples = values[draw].mean(axis=1)
+    return {'estimate': float(values.mean()), 'ci95': [percentile(samples, .025), percentile(samples, .975)]}
+
+
+def check_endpoint(label, expected, actual):
+    check('endpoint_estimate_' + label, eq(expected['estimate'], actual['estimate']))
+    check('endpoint_interval_' + label, len(actual['ci95']) == 2 and all(eq(a, b) for a, b in zip(expected['ci95'], actual['ci95'])))
+
+
+def load_inputs():
+    plan = js(OUT / 'plan.json')
+    check('frozen_bank_readout_configuration', plan['banks'] == BANKS and plan['readouts'] == READOUTS)
+    check('frozen_cell_counts', plan['readout_cells'] == {'full': 4096, '00': 1024, '01': 1024, '10': 1024, '11': 1024})
+    freeze, sup, final = js(X / 'prediction_freeze.json'), js(X / 'supervisor.json'), js(X / 'final_analysis_status.json')
+    check('upstream_successful_terminal', sup['exit_code'] == 0 and sup['timeout'] is False)
+    check('upstream_canonical_final_pass', final['status'] == plan['bindings']['final_analysis_status'] == 'PASS_FINAL_INDEPENDENT_ANALYSIS')
+    check('upstream_result_sha', hashlib.sha256(raw(X / 'analysis_result.json')).hexdigest() == final['result_sha256'])
+    check('upstream_prediction_freeze', freeze['status'] == plan['bindings']['freeze_status'] == 'SPATIAL_DIAGNOSTIC_PREDICTIONS_FROZEN')
+    check('no_confirmation_or_masks', freeze['confirmation_access'] == 0 and freeze['mask_requests'] == 0)
+    scalar = csvrows(X / 'scalar_predictions.csv')
+    statrows = csvrows(X / 'spatial_statistics.csv')
+    for name in ('scalar_predictions.csv', 'spatial_statistics.csv'):
+        check('bound_input_hash_' + name, READS[str((X / name).resolve())]['sha256'] == plan['bindings'][name] == freeze['sha256_files'][name])
+    source = {r['path']: r for r in csvrows(INPUTS)}
+    wanted = {p: r for p, r in source.items() if r['research_role'] in ('source_calibration', 'development')}
+    query = {r['path']: r for r in scalar}
+    check('1135_unique_allowed_queries', len(scalar) == len(query) == len(wanted) == 1135 and set(query) == set(wanted))
+    check('380_755_roles', collections.Counter(r['research_role'] for r in scalar) == {'source_calibration': 380, 'development': 755})
+    for p, r in query.items():
+        check('bound_query_metadata', all(r[k] == wanted[p][k] for k in META), p)
+    stat = {(r['method'], r['path']): r for r in statrows if r['method'] in BANKS}
+    check('2270_unique_original_bank_views', len(stat) == 2270 and len([r for r in statrows if r['method'] in BANKS]) == 2270)
+    oldscalar = {r['path']: r for r in csvrows(OLD / 'scalar_predictions.csv')}
+    oldfreeze = js(OLD / 'prediction_freeze.json')
+    identities = csvrows(OLD / 'new_bank_source_identities.csv')
+    for bank in BANKS:
+        check('original_bank_hash_' + bank, freeze['bank_hashes'][bank] == oldfreeze['bank_hashes'][bank])
+        bankrows = [r for r in identities if r['method'] == bank]
+        check('4096_bank_identities_' + bank, len(bankrows) == 4096 and {int(r['prototype']) for r in bankrows} == set(range(4096)))
+        if bank == BANKS[0]:
+            check('odd_bank_only_source_parity11', all(int(r['row']) % 2 == int(r['col']) % 2 == 1 for r in bankrows))
+        for p, r in query.items():
+            s = stat[(bank, p)]
+            check('bound_spatial_metadata', all(s[k] == r[k] for k in META), [bank, p])
+            full = float(s['max'])
+            phases = [float(s['parity' + phase + '_max']) for phase in READOUTS[1:]]
+            check('positive_full_and_phase_scores', math.isfinite(full) and full > 0 and all(math.isfinite(v) and v > 0 for v in phases), [bank, p])
+            check('full_is_exact_max_of_four_phases', max(phases) == full and all(v <= full for v in phases), [bank, p])
+            check('1135_full_controls_exact', full == float(r[bank]) == float(oldscalar[p][bank]), [bank, p])
+            for phase in READOUTS[1:]:
+                rr, cc = int(s['parity' + phase + '_argmax_row']), int(s['parity' + phase + '_argmax_col'])
+                check('phase_representative_coordinate', 0 <= rr <= 63 and 0 <= cc <= 63 and (rr % 2, cc % 2) == (int(phase[0]), int(phase[1])), [bank, p, phase])
+    cal = grouped([r for r in scalar if r['research_role'] == 'source_calibration'])
+    dev = grouped([r for r in scalar if r['research_role'] == 'development'])
+    check('cal_dev_group_counts_and_disjoint', len(cal) == 76 and len(dev) == 151 and not set(cal) & set(dev))
+    with zipfile.ZipFile(io.BytesIO(raw(LABELS))) as z:
+        doc = json.loads(z.read('realiad_jsons/plastic_nut.json'))
+    labels = {}
+    for split in ('train', 'test'):
+        for record in doc[split]:
+            p = doc['meta']['prefix'] + record['image_path']
+            if p in query:
+                labels[p] = record['anomaly_class'] != doc['meta']['normal_class'] and record['mask_path'] is not None
+    check('official_labels_complete', set(labels) == set(query))
+    check('calibration_all_official_normal', not any(labels[r['path']] for rr in cal.values() for r in rr))
+    check('258_official_abnormal_dev_views', sum(labels[r['path']] for rr in dev.values() for r in rr) == 258)
+    group_label = {k: any(labels[r['path']] for r in rr) for k, rr in dev.items()}
+    check('44_normal_107_abnormal_groups', sum(group_label.values()) == 107 and len(group_label) - sum(group_label.values()) == 44)
+    prior_group_rows = csvrows(X / 'analysis_group_predictions.csv')
+    check('existing_group_label_consistency', {r['group_key'] for r in prior_group_rows} == set(dev)
+          and all(flag(r['is_anomaly']) == group_label[r['group_key']] for r in prior_group_rows))
+    return plan, query, stat, cal, dev, labels
+
+
+def score(stat, bank, readout, path):
+    return float(stat[(bank, path)]['max' if readout == 'full' else 'parity' + readout + '_max'])
+
+
+def verify_primary(stat, cal, result):
+    groupvalues = {readout: [] for readout in READOUTS}
+    for group, rows in cal.items():
+        for readout in READOUTS:
+            values = [math.log(score(stat, BANKS[0], readout, r['path']) / score(stat, BANKS[1], readout, r['path'])) for r in rows]
+            groupvalues[readout].append(math.fsum(values) / 5)
+    draw = np.random.Generator(np.random.PCG64(20261013)).integers(0, 76, size=(5000, 76))
+    endpoints = {'g_full': boot(groupvalues['full'], draw), 'g_11': boot(groupvalues['11'], draw),
+                 'interaction': boot(np.array(groupvalues['full']) - np.array(groupvalues['11']), draw)}
+    for key, expected in endpoints.items():
+        check_endpoint(key, expected, result['primary'][key])
+    descriptives = {}
+    for phase in READOUTS[1:]:
+        descriptives[phase] = {'g_phase': boot(groupvalues[phase], draw),
+            'interaction': boot(np.array(groupvalues['full']) - np.array(groupvalues[phase]), draw)}
+        for endpoint, expected in descriptives[phase].items():
+            check_endpoint(phase + '_' + endpoint, expected, result['descriptive_phases'][phase][endpoint])
+    gate = endpoints['interaction']['ci95'][0] > 0
+    check('frozen_diagnostic_gate_exact', result['diagnostic_gate_pass'] == gate)
+    csvvalue = csvrows(OUT / 'primary_groups.csv')
+    indexed = {r['group_key']: r for r in csvvalue}
+    check('primary_group_identities', len(csvvalue) == len(indexed) == 76 and set(indexed) == set(cal))
+    for i, group in enumerate(cal):
+        r = indexed[group]
+        check('per_group_g_full', eq(r['g_full'], groupvalues['full'][i]), group)
+        for phase in READOUTS[1:]:
+            check('per_group_phase_contrast', eq(r['g_' + phase], groupvalues[phase][i]), [group, phase])
+            check('per_group_interaction', eq(r['interaction_' + phase], groupvalues['full'][i] - groupvalues[phase][i]), [group, phase])
+    return endpoints, descriptives
+
+
+def verify_provenance_and_resources(plan):
+    admission = js(OUT / 'admission.json')
+    check('producer_admission_status', admission['status'] == 'PASS_FROZEN_METADATA_AND_SCALAR_ADMISSION')
+    check('all_producer_admission_checks_pass', len(admission['checks']) > 0 and all(r['passed'] is True for r in admission['checks']))
+    for filename, expected in admission['input_hashes'].items():
+        check('producer_input_hash_unchanged', hashlib.sha256(raw(Path(filename))).hexdigest() == expected, filename)
+    resources = js(OUT / 'resource_receipt.json')
+    check('producer_resource_receipt_pass', resources['status'] == 'PASS_RESOURCE_LIMITS')
+    check('producer_resource_limits_match_plan', resources['limits'] == plan['resources'])
+    check('producer_cpu_wall_within_budget', 0 < resources['wall_seconds'] <= plan['resources']['cpu_wall_seconds'])
+    check('producer_peak_rss_within_budget', 0 < resources['rss_bytes'] <= resources['process_peak_rss_bytes'] <= plan['resources']['rss_bytes'])
+    check('producer_persisted_bytes_within_budget', 0 < resources['output_bytes_before_receipt'] <= plan['resources']['output_bytes_limit'])
+    for filename, expected in resources['output_hashes'].items():
+        check('producer_output_hash_unchanged', hashlib.sha256(raw(OUT / filename)).hexdigest() == expected, filename)
+    return resources
+
+
+def verify_view_and_peak_descriptions(query, stat):
+    peakrows = csvrows(OUT / 'phase_peak_statistics.csv')
+    peakindex = {(r['bank'], r['readout'], r['research_role']): r for r in peakrows}
+    check('20_peak_strata_complete', len(peakrows) == len(peakindex) == 20)
+    for bank in BANKS:
+        for readout in READOUTS:
+            prefix = '' if readout == 'full' else 'parity' + readout + '_'
+            tie_key = 'image_max_tie_count' if readout == 'full' else 'parity' + readout + '_max_tie_count'
+            for role, n in [('source_calibration', 380), ('development', 755)]:
+                paths = [p for p, r in query.items() if r['research_role'] == role]
+                outer = tl = br = tied = tiecells = 0
+                for p in paths:
+                    r = stat[(bank, p)]
+                    rr, cc = int(r[prefix + 'argmax_row']), int(r[prefix + 'argmax_col'])
+                    outer += rr in (0, 63) or cc in (0, 63)
+                    tl += rr == 0 or cc == 0
+                    br += rr == 63 or cc == 63
+                    ties = int(r[tie_key])
+                    tied += ties > 1
+                    tiecells += ties
+                actual = peakindex[(bank, readout, role)]
+                expected = {'n': n, 'readout_cells': 4096 if readout == 'full' else 1024,
+                    'representative_outer_ring_peaks': outer, 'representative_outer_ring_fraction': outer / n,
+                    'representative_top_left_peaks': tl, 'representative_bottom_right_peaks': br,
+                    'images_with_max_ties': tied, 'total_max_tie_cells': tiecells}
+                check('peak_description_statistics', all(eq(actual[k], v) for k, v in expected.items()), [bank, readout, role])
+    return {'peak_strata': len(peakrows), 'interpretation': 'First-index peak coordinates; tied counts retained. Different parities retain different boundary sides.'}
+
+
+def verify_operating(stat, cal, dev, labels):
+    thresholds = {}
+    for bank in BANKS:
+        for readout in READOUTS:
+            for unit in ('image', 'group'):
+                values = [score(stat, bank, readout, r['path']) for rows in cal.values() for r in rows] if unit == 'image' else [max(score(stat, bank, readout, r['path']) for r in rows) for rows in cal.values()]
+                rank, tau = rank_threshold(values)
+                thresholds[(bank, readout, unit)] = {'n': len(values), 'rank': rank, 'threshold': tau}
+    published_thresholds = csvrows(OUT / 'thresholds.csv')
+    keyed_thresholds = {(r['bank'], r['readout'], r['calibration_unit']): r for r in published_thresholds}
+    check('20_threshold_rows_complete', len(published_thresholds) == len(keyed_thresholds) == 20 and set(keyed_thresholds) == set(thresholds))
+    for key, expected in thresholds.items():
+        actual = keyed_thresholds[key]
+        check('threshold_rank_n_value', int(actual['n']) == expected['n'] and int(actual['rank']) == expected['rank'] and float(actual['threshold']) == expected['threshold'], key)
+    expected_ops, expected_groups = {}, {}
+    for scorebank in BANKS:
+        for readout in READOUTS:
+            for taubank in BANKS:
+                for unit in ('image', 'group'):
+                    key = (scorebank, readout, taubank, unit)
+                    tau = thresholds[(taubank, readout, unit)]['threshold']
+                    fp = anytp = support = 0
+                    for group, rows in dev.items():
+                        y = any(labels[r['path']] for r in rows)
+                        alarms = [score(stat, scorebank, readout, r['path']) > tau for r in rows]
+                        anyalarm = any(alarms)
+                        supported = any(a and labels[r['path']] for a, r in zip(alarms, rows))
+                        fp += anyalarm and not y
+                        anytp += anyalarm and y
+                        support += supported and y
+                        expected_groups[key + (group,)] = {'is_anomaly': y, 'any_alarm': anyalarm, 'supported_alarm': supported}
+                    expected_ops[key] = {'threshold': tau, 'normal_groups': 44, 'abnormal_groups': 107,
+                        'normal_false_positive_groups': fp, 'any_detected_abnormal_groups': anytp,
+                        'supported_detected_abnormal_groups': support,
+                        'normal_group_fpr': fp / 44, 'any_group_tpr': anytp / 107, 'supported_group_tpr': support / 107}
+    published_ops = csvrows(OUT / 'threshold_swap.csv')
+    def opkey(r):
+        return (r['score_bank'], r['readout'], r['threshold_bank'], r['threshold_unit'])
+    indexed_ops = {opkey(r): r for r in published_ops}
+    check('40_cross_threshold_rows_complete', len(published_ops) == len(indexed_ops) == 40 and set(indexed_ops) == set(expected_ops))
+    for key, expected in expected_ops.items():
+        actual = indexed_ops[key]
+        check('cross_threshold_statistics', all(eq(actual[k], v) for k, v in expected.items()), key)
+    secondary = csvrows(OUT / 'secondary.csv')
+    keyed_secondary = {opkey(r): r for r in secondary}
+    diagonal = {k for k in expected_ops if k[0] == k[2]}
+    check('20_secondary_diagonal_rows_complete', len(secondary) == len(keyed_secondary) == 20 and set(keyed_secondary) == diagonal)
+    for key, actual in keyed_secondary.items():
+        check('self_operating_exact_diagonal', all(eq(actual[k], v) for k, v in expected_ops[key].items()), key)
+    published_groups = csvrows(OUT / 'group_predictions.csv')
+    keyed_groups = {opkey(r) + (r['group_key'],): r for r in published_groups}
+    check('6040_operating_group_rows_complete', len(published_groups) == len(keyed_groups) == 40 * 151 and set(keyed_groups) == set(expected_groups))
+    for key, expected in expected_groups.items():
+        check('operating_group_bools_exact', all(flag(keyed_groups[key][k]) == v for k, v in expected.items()), key)
+    return thresholds, expected_ops
+
+
+def selftest():
+    assert rank_threshold(range(1, 381)) == (362, 362.0)
+    assert rank_threshold(range(1, 77)) == (74, 74.0)
+    assert percentile([0, 1, 2, 3], .25) == .75
+    rng = np.random.Generator(np.random.PCG64(20261013))
+    draw = rng.integers(0, 76, (5000, 76))
+    expected = boot(np.full(76, math.log(2)), draw)
+    assert eq(expected['estimate'], math.log(2)) and all(eq(v, math.log(2)) for v in expected['ci95'])
+    assert not (boot(np.zeros(76), draw)['ci95'][0] > 0)
+    value = {'status': 'PASS_SYNTHETIC_VERIFIER_SELFTEST', 'research_data_read': False,
+             'checks': ['finite_sample_ranks', 'linear_percentiles', 'paired_constant_log_effect', 'strict_positive_gate']}
+    dump('verification_selftest.json', value)
+    print(json.dumps(value))
+
+
+def main():
+    started = time.perf_counter()
+    required = ['result.json', 'primary_groups.csv', 'thresholds.csv', 'secondary.csv', 'threshold_swap.csv', 'group_predictions.csv', 'phase_peak_statistics.csv', 'admission.json', 'resource_receipt.json']
+    missing = [n for n in required if not (OUT / n).exists()]
+    if missing:
+        print(json.dumps({'status': 'WAIT_COMPLETE_OUTPUTS', 'missing': missing}))
+        return 2
+    try:
+        plan, query, stat, cal, dev, labels = load_inputs()
+        resources = verify_provenance_and_resources(plan)
+        result = js(OUT / 'result.json')
+        check('producer_scientific_status', result['status'] == 'PASS_EXPLORATORY_QUERY_SUPPORT_ANALYSIS')
+        primary, descriptive = verify_primary(stat, cal, result)
+        thresholds, operating = verify_operating(stat, cal, dev, labels)
+        peak_verification = verify_view_and_peak_descriptions(query, stat)
+        report = {'status': 'PASS_INDEPENDENT_QUERY_SUPPORT_VERIFICATION', 'checks_total': sum(CHECK_COUNTS.values()),
+                  'checks_failed': len(FAILURES), 'check_counts': dict(CHECK_COUNTS), 'failed_checks': FAILURES,
+                  'ordered_check_records_sha256': CHECK_HASH.hexdigest(), 'primary': primary, 'descriptive_phases': descriptive,
+                  'inputs': READS, 'wall_seconds': time.perf_counter() - started,
+                  'producer_resources': resources, 'peak_verification': peak_verification,
+                  'limitations': ['A 1024-cell readout has fewer extreme-value opportunities than full4096; this is not a free improvement.',
+                    'Four parities have equal cell counts but different boundary sides; parity11 is not a pure interior control.',
+                    'Fixed banks and reused development, no novel-method, mask-support or causal-mediation conclusion.']}
+        dump('independent_verification.json', report)
+        persisted = sum(p.stat().st_size for p in OUT.rglob('*') if p.is_file())
+        if persisted > plan['resources']['output_bytes_limit']:
+            raise ValueError('Output budget exceeded after independent verification')
+        print(json.dumps({'status': report['status'], 'checks_total': report['checks_total'], 'primary': primary, 'wall_seconds': report['wall_seconds']}, indent=2))
+        return 0
+    except Exception as error:
+        dump('verification_failure.json', {'status': 'FAIL_INDEPENDENT_VERIFICATION', 'error_type': type(error).__name__,
+              'message': str(error), 'checks_total': sum(CHECK_COUNTS.values()), 'check_counts': dict(CHECK_COUNTS),
+              'failed_checks': FAILURES, 'ordered_check_records_sha256': CHECK_HASH.hexdigest(), 'inputs': READS})
+        raise
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--self-test', action='store_true')
+    args = parser.parse_args()
+    if args.self_test:
+        selftest()
+    else:
+        sys.exit(main())

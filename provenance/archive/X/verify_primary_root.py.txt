@@ -1,0 +1,67 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Small second implementation of primary effects; no producer imports."""
+import csv
+import hashlib
+import json
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+
+
+def main():
+    sup = json.loads((HERE / 'supervisor.json').read_text())
+    assert sup['exit_code'] == 0 and not sup['timeout']
+    first = json.loads((HERE / 'analysis_result.json').read_text(encoding='utf-8'))
+    assert first['status'] == 'INDEPENDENT_SPATIAL_ANALYSIS_PASS'
+    freeze = json.loads((HERE / 'prediction_freeze.json').read_text())
+    p = HERE / 'spatial_statistics.csv'
+    assert hashlib.sha256(p.read_bytes()).hexdigest() == freeze['sha256_files'][p.name]
+    with p.open(newline='', encoding='utf-8') as f:
+        rows = [r for r in csv.DictReader(f) if r['research_role'] == 'source_calibration']
+    methods = ('balanced_delete_topleft', 'balanced_delete_interior_sham')
+    by_id = {(r['group_key'], int(r['camera']), r['method']): r for r in rows}
+    groups = sorted({r['group_key'] for r in rows})
+    assert len(groups) == 76 and len(rows) == 380 * 4 and len(by_id) == len(rows)
+    fields = ('max', 'top_left_max', 'interior_max')
+    values = []
+    for group in groups:
+        group_values = []
+        for camera in range(1, 6):
+            a, b = [by_id[(group, camera, method)] for method in methods]
+            va, vb = [np.array([float(r[field]) for field in fields]) for r in (a, b)]
+            assert (va > 0).all() and (vb > 0).all()
+            group_values.append(np.log(va) - np.log(vb))
+        values.append(np.mean(group_values, axis=0))
+    values = np.array(values)
+    values = np.column_stack([values, values[:, 1] - values[:, 2]])
+    names = ('full', 'top_left', 'interior', 'spatial_interaction')
+    # Explicit draw loop supplies the same frozen PCG64 stream and grouping.
+    rng = np.random.Generator(np.random.PCG64(20261012))
+    samples = np.array([np.mean(values[rng.integers(0, 76, size=76)], axis=0)
+                        for _ in range(5000)])
+    effects = values.mean(axis=0)
+    intervals = np.quantile(samples, [0.025, 0.975], axis=0)
+    errors = []
+    summaries = {}
+    for index, name in enumerate(names):
+        expected = first['primary']['endpoints'][name]
+        errors.extend([abs(effects[index] - expected['mean_log_contrast']),
+                       *np.abs(intervals[:, index] - expected['conditional_percentile95'])])
+        summaries[name] = {'mean_log': float(effects[index]),
+                           'ci95': intervals[:, index].tolist()}
+    assert max(errors) < 1e-12
+    result = {'status': 'PASS_SECOND_PRIMARY_IMPLEMENTATION', 'scalar_comparisons': len(errors),
+              'max_absolute_error': float(max(errors)), 'endpoints': summaries,
+              'group_count': 76, 'bootstrap_samples': 5000, 'seed': 20261012,
+              'scope': 'Recomputes saved normal primary endpoints, not GPU distances or new bank.'}
+    with (HERE / 'root_primary_verification.json').open('x', encoding='utf-8') as f:
+        json.dump(result, f, indent=2)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()

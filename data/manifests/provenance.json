@@ -1,0 +1,67 @@
+{
+  "scope": "Already-admitted plastic_nut source_fit, source_calibration and development only. No images, masks, feature tensors, dense maps, credentials or confirmation data.",
+  "original_source_sha256": [
+    {
+      "logical_source": "P1 scalar",
+      "file_basename": "scalar_predictions.csv",
+      "sha256": "79ff2c165862e9b9fa538df19164c18fee8472b95179421b7357ef3fa83c7214"
+    },
+    {
+      "logical_source": "P1 spatial",
+      "file_basename": "spatial_statistics.csv",
+      "sha256": "07af09698828c19bb13582714d25dfc0334396f920376bbc7db262251d24167a"
+    },
+    {
+      "logical_source": "P1 result",
+      "file_basename": "analysis_result.json",
+      "sha256": "9be7c135cb30a5eaeaed33458506a6f0dad8ac57448fa2ce75f1499f02e3d68e"
+    },
+    {
+      "logical_source": "E scalar",
+      "file_basename": "scalar_predictions.csv",
+      "sha256": "7d3c49540704ee83fb15dda58a5c70ba061961532398124c74b5fa532be369d1"
+    },
+    {
+      "logical_source": "E result",
+      "file_basename": "analysis_result.json",
+      "sha256": "3f81fbf9419790c9944fb0f4645b722eeec8c740cadc6029c018166484097113"
+    },
+    {
+      "logical_source": "Y result",
+      "file_basename": "result.json",
+      "sha256": "c63412e5439afef2e532edcf9130078efcc079233cd3e6774c753d26873d5905"
+    },
+    {
+      "logical_source": "X scalar",
+      "file_basename": "scalar_predictions.csv",
+      "sha256": "cad7b7b6d550b0130d47f889b7c6bef89b0ab0c541a24e7ab5a1cbe6d69b9c62"
+    },
+    {
+      "logical_source": "X canonical result",
+      "file_basename": "analysis_result_v2.json",
+      "sha256": "58f62764eff960ccd7b9c02ccb554ebcaf3c45f1f77227e674de640b4ed14436"
+    },
+    {
+      "logical_source": "P2 legal edges",
+      "file_basename": "best_pair_by_source_phase.csv",
+      "sha256": "a567e439a81d118afb856add91ce26483d634fd7db44b7b07ef41e6bee8ea07c"
+    },
+    {
+      "logical_source": "P2 matching audit",
+      "file_basename": "matching_audit.json",
+      "sha256": "e9efc08755850c50490feb9b3bfaf7a9823f7b959a33e8348b1eeddf8826e7b8"
+    },
+    {
+      "logical_source": "Role source",
+      "file_basename": "inputs.csv",
+      "sha256": "50d1e1354e1ed5136daf49a56d7faff1ffa8e811878c74203bd51c1ebe601790"
+    }
+  ],
+  "role_counts": {
+    "source_fit": 875,
+    "source_calibration": 380,
+    "development": 755
+  },
+  "groups": 402,
+  "abnormal_development_views": 258
+}

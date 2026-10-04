@@ -1,0 +1,446 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""P1 producer draft: three fixed candidate pools, three coreset seeds, full query.
+
+No execution on import. Metadata admission precedes resource probe and inference.
+All real image/features/maps/banks remain in RAM. Analysis is a separate step.
+"""
+from pathlib import Path
+from collections import defaultdict
+import csv
+import gc
+import hashlib
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import time
+import traceback
+import uuid
+
+sys.dont_write_bytecode = True
+OUT = Path(__file__).resolve().parent
+ROOT = Path('${PROJECT_ROOT}')
+SEALED = ROOT/'artifacts/ram_ad_20260918'
+OLD = SEALED/'realiad_static_development'
+UP = Path('${RESEARCH_WORKSPACE}/innovation_loop_20261003_session01/bank_coverage_attempt01')
+HELPER = Path('${RESEARCH_WORKSPACE}/industrial_ad_20261003_realiad_local_evidence/run_round.py')
+CHECKPOINT = Path('${USER_HOME}/.cache/torch/hub/checkpoints/dinov2_vitb14_pretrain.pth')
+CONSTRUCTIONS = ('odd', 'balanced', 'random')
+SEEDS = (0, 1, 2)
+METHODS = tuple(f'{construction}_s{seed}' for construction in CONSTRUCTIONS for seed in SEEDS)
+IDENTITY = ('category', 'path', 'group_key', 'camera', 'research_role')
+COUNTS = {'source_fit': 875, 'source_calibration': 380, 'development': 755}
+OLD_NAMES = {'odd_s0': 'dino_odd_own', 'balanced_s0': 'dino_balanced_own'}
+
+
+def sha(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for block in iter(lambda: stream.read(8*1024**2), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def read(path):
+    return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+
+
+def rows(path):
+    with Path(path).open(encoding='utf-8-sig', newline='') as stream:
+        return list(csv.DictReader(stream))
+
+
+def save(name, value):
+    with (OUT/name).open('x', encoding='utf8') as stream:
+        json.dump(value, stream, indent=2, allow_nan=False)
+
+
+def csvsave(name, records):
+    with (OUT/name).open('x', encoding='utf8', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(records[0]))
+        writer.writeheader()
+        writer.writerows(records)
+
+
+def load_static():
+    sys.path.insert(0, str(OLD))
+    import static_runner
+    return static_runner
+
+
+def load_core():
+    sys.path.insert(0, str(SEALED/'static_reference_audit'))
+    import static_core
+    static_core.configure()
+    assert static_core.torch.cuda.is_available()
+    return static_core
+
+
+def check_admission():
+    preflight = read(OUT/'preflight.json')
+    assert preflight['status'] == 'PASS_METADATA_AND_LOCAL_DEPENDENCY_ADMISSION'
+    assert sha(__file__) == preflight['producer_sha256']
+    for filename, expected in {**preflight['dependency_hashes'], **preflight['checkpoint_hashes']}.items():
+        assert sha(filename) == expected
+    plan = read(OUT/'plan.json')
+    assert plan['methods'] == list(METHODS)
+    assert plan['input_roles'] == COUNTS
+    assert plan['confirmation_pixels_and_scores'] == plan['masks_requested'] == 0
+    assert plan['resources']['gpu_wall_seconds'] == 1800
+    assert plan['resources']['rss_bytes'] == 40*1024**3
+    assert plan['resources']['supervisor_seconds'] == 5400
+    return plan, preflight
+
+
+def candidates(np, path):
+    seed = int.from_bytes(hashlib.sha256(('bank256:'+path).encode()).digest()[:8], 'little')
+    coarse = np.random.default_rng(seed).choice(1024, 256, replace=False)
+    rr, cc = coarse//32, coarse%32
+    seed2 = int.from_bytes(hashlib.sha256(('phase256:'+path).encode()).digest()[:8], 'little')
+    phase = np.random.default_rng(seed2).permutation(np.tile(np.arange(4), 64))
+    seed3 = int.from_bytes(hashlib.sha256(('random256-v1:'+path).encode()).digest()[:8], 'little')
+    result = {'odd': (2*rr+1)*64+2*cc+1,
+              'balanced': (2*rr+phase//2)*64+2*cc+phase%2,
+              'random': np.random.default_rng(seed3).choice(4096, 256, replace=False)}
+    assert np.array_equal(np.bincount(phase), [64]*4)
+    assert all(len(np.unique(value)) == 256 for value in result.values())
+    return result
+
+
+def select_seeded(base, np, pool, seed, deadline):
+    """Exact upstream wrapper with only the two RNG seeds parameterized."""
+    np.random.seed(seed)
+    base.torch.manual_seed(seed)
+    sampler = base.RecordingSampler((4096+.5)/len(pool), base.torch.device('cuda'))
+    sampler.deadline = deadline
+    with base.torch.no_grad():
+        bank = sampler.run(pool)
+    assert len(bank) == 4096
+    return np.asarray(bank), sampler.indices
+
+
+def load_dino(torch):
+    sys.path.insert(0, str(SEALED/'vendor/dinov2_source'))
+    from dinov2.hub.backbones import dinov2_vitb14
+    model = dinov2_vitb14(pretrained=False)
+    model.load_state_dict(torch.load(CHECKPOINT, map_location='cpu', weights_only=True), strict=True)
+    return model.eval().requires_grad_(False).cuda()
+
+
+def region_masks(np):
+    rr, cc = np.indices((64, 64))
+    inner = (rr >= 1)&(rr <= 62)&(cc >= 1)&(cc <= 62)
+    result = {'top_left': (rr == 0)|(cc == 0), 'bottom_right': (rr == 63)|(cc == 63),
+              'outer_ring': (rr == 0)|(rr == 63)|(cc == 0)|(cc == 63), 'interior': inner}
+    for a in (0, 1):
+        for b in (0, 1):
+            parity = (rr%2 == a)&(cc%2 == b)
+            result[f'parity{a}{b}'] = parity
+            result[f'interior_parity{a}{b}'] = parity&inner
+            assert int(parity.sum()) == 1024 and int((parity&inner).sum()) == 961
+    return {key: value.ravel() for key, value in result.items()}
+
+
+def summarize(np, row, method, distances, masks):
+    assert distances.shape == (4096,) and np.isfinite(distances).all() and (distances >= 0).all()
+    peak = int(np.argmax(distances))
+    ties = distances == distances[peak]
+    record = {key: row[key] for key in IDENTITY}
+    record.update(method=method, max=float(distances[peak]), argmax_row=peak//64, argmax_col=peak%64,
+                  image_max_tie_count=int(ties.sum()), evaluated_query_cells=4096)
+    for name, mask in masks.items():
+        values = distances[mask]
+        indices = np.flatnonzero(mask)
+        index = int(indices[np.argmax(values)])
+        record[name+'_max'] = float(distances[index])
+        record[name+'_argmax_row'] = index//64
+        record[name+'_argmax_col'] = index%64
+        record[name+'_max_tie_count'] = int(np.count_nonzero(values == distances[index]))
+        record['image_max_ties_'+name] = int((ties&mask).sum())
+    return record
+
+
+def resource_probe(nonce):
+    """Synthetic-only timing; contains no study pixels or scientific scores."""
+    started = time.perf_counter()
+    assert read(OUT/'probe_claim.json')['nonce'] == nonce
+    plan, preflight = check_admission()
+    import numpy as np
+    s = load_static()
+    with s.Budget(started+min(600, plan['resources']['gpu_wall_seconds']), 40*1024**3, s.WindowsHostMemory()) as budget:
+        base = load_core()
+        torch = base.torch
+        torch.cuda.reset_peak_memory_stats()
+        rng = np.random.default_rng(20261015)
+        pool = rng.standard_normal((224000, 768), dtype=np.float32)
+        begin = time.perf_counter()
+        bank, indices = select_seeded(base, np, pool, 0, budget.deadline)
+        torch.cuda.synchronize()
+        core_seconds = time.perf_counter()-begin
+        del pool, indices
+        gc.collect()
+        banks = [torch.from_numpy(bank.copy()).cuda() for _ in range(9)]
+        query = rng.standard_normal((4096, 768), dtype=np.float32)
+        begin = time.perf_counter()
+        for _ in range(5):
+            for test_bank in banks:
+                budget.check()
+                base.nearest_squared(query, test_bank)
+        torch.cuda.synchronize()
+        nn_nine_seconds_per_image = (time.perf_counter()-begin)/5
+        del banks, bank, query, test_bank
+        torch.cuda.empty_cache()
+        model = load_dino(torch)
+        x = torch.zeros((1, 3, 896, 896), dtype=torch.float32, device='cuda')
+        begin = time.perf_counter()
+        with torch.no_grad():
+            for _ in range(16):
+                budget.check()
+                model.get_intermediate_layers(x, n=(11,), norm=True)
+        torch.cuda.synchronize()
+        embed_seconds_per_image = (time.perf_counter()-begin)/16
+        measured_components = 2010*embed_seconds_per_image + 9*core_seconds + 1135*nn_nine_seconds_per_image
+        # Reserve 50% timing margin plus 90 s for decode, summaries, loading and transfers.
+        projected_execution_gpu = 1.5*measured_components+90
+        peak_cuda = int(torch.cuda.max_memory_allocated())
+        memory = budget.memory_report()
+        del model, x
+        gc.collect()
+        torch.cuda.empty_cache()
+        budget.check()
+    elapsed = time.perf_counter()-started
+    projected_total = elapsed+projected_execution_gpu
+    record = {'status': 'PASS_RESOURCE_PROJECTION' if projected_total <= 1800 else 'STOP_RESOURCE_PROJECTION',
+              'synthetic_only': True, 'new_pixels': 0, 'credentials_read': False, 'confirmation_access': 0,
+              'gpu_wall_seconds': elapsed, 'wall_seconds': elapsed, 'coreset_full224000_seconds': core_seconds,
+              'nn_nine_seconds_per_image': nn_nine_seconds_per_image,
+              'dino896_seconds_per_image': embed_seconds_per_image, 'projection_formula': 'probe_elapsed + 1.5*(2010*embed + 9*coreset + 1135*nn9) + 90',
+              'projected_total_gpu_wall_seconds': projected_total,
+              'projected_total_wall_with_max_acquisition_seconds': projected_total+plan['resources']['image_acquisition_seconds'],
+              'peak_cuda_allocated_bytes': peak_cuda, 'host_memory': memory,
+              'plan_sha256': sha(OUT/'plan.json'), 'producer_sha256': sha(__file__),
+              'limit_gpu_wall_seconds': 1800, 'historical_budget_reset': False,
+              'limitation': 'Synthetic throughput is a feasibility estimate, not a guarantee. Hard budgets remain binding.'}
+    assert record['projected_total_wall_with_max_acquisition_seconds'] <= 5400 or record['status'].startswith('STOP')
+    save('resource_probe.json', record)
+    print(json.dumps(record), flush=True)
+
+
+def worker(nonce):
+    started_total = time.perf_counter()
+    assert read(OUT/'execution_claim.json')['nonce'] == nonce
+    plan, preflight = check_admission()
+    probe = read(OUT/'resource_probe.json')
+    assert probe['status'] == 'PASS_RESOURCE_PROJECTION'
+    assert probe['plan_sha256'] == sha(OUT/'plan.json') and probe['producer_sha256'] == sha(__file__)
+    import numpy as np
+    from PIL import Image
+    s = load_static()
+    roles = s.load_manifest()['plastic_nut']
+    assert {key: len(value) for key, value in roles.items()} == COUNTS
+    assert s.order_hash(roles['source_fit']) == preflight['source_order_sha256']
+    inputs = {row['path']: row for row in rows(OLD/'attempt02/results/plastic_nut/inputs.csv')}
+    assert set(inputs) == {row['path'] for role in s.RUN_ROLES for row in roles[role]}
+    spec = importlib.util.spec_from_file_location('p1_transport_helpers', HELPER)
+    h = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(h)
+    h.OUT = OUT
+    events = []
+    deadline = time.perf_counter()+plan['resources']['image_acquisition_seconds']
+    token = h.local_token()
+    for attempt in range(3):
+        try:
+            ram = h.acquire('plastic_nut', inputs, token, deadline, 'image')
+            events.append({'attempt': attempt+1, 'status': 'PASS'})
+            break
+        except h.transport.RangeError as error:
+            transient = str(error) == 'transport failure; no credentials logged'
+            events.append({'attempt': attempt+1, 'status': 'TRANSIENT' if transient else 'VALIDATION_FAILURE', 'partial_response_bytes': 'UNKNOWN'})
+            if not transient or attempt == 2 or time.perf_counter() >= deadline:
+                save('transport_attempts.json', events)
+                raise
+    del token
+    save('transport_attempts.json', events)
+    assert time.perf_counter() <= deadline
+    gpu_started = time.perf_counter()
+    timings = {'decode_seconds': 0., 'fit_embed_seconds': 0., 'query_embed_seconds': 0., 'candidate_copy_seconds': 0.,
+               'coreset_seconds': {}, 'nearest_seconds': {method: 0. for method in METHODS}, 'summarize_seconds': 0.}
+    oldpred = {row['path']: row for row in rows(UP/'scalar_predictions.csv')}
+    oldfreeze = read(UP/'prediction_freeze.json')
+    oldids = defaultdict(list)
+    for row in rows(UP/'new_bank_source_identities.csv'):
+        oldids[row['method']].append(row)
+    summaries, scores, coverage, identities = [], [], [], []
+    hashes, errors = {}, {method: 0. for method in OLD_NAMES}
+    remaining_gpu = 1800-probe['gpu_wall_seconds']
+    with s.Budget(gpu_started+remaining_gpu, 40*1024**3, s.WindowsHostMemory()) as budget:
+        base = load_core()
+        torch = base.torch
+        torch.cuda.reset_peak_memory_stats()
+        model = load_dino(torch)
+        def embed(row, phase):
+            budget.check()
+            assert row['research_role'] in s.RUN_ROLES and row['path'] in ram
+            begin = time.perf_counter()
+            with Image.open(io.BytesIO(ram[row['path']])) as im:
+                assert im.size == (1024, 1024)
+                a = np.array(im.convert('RGB').resize((896, 896), Image.Resampling.BILINEAR), dtype=np.float32)/255.
+            timings['decode_seconds'] += time.perf_counter()-begin
+            begin = time.perf_counter()
+            x = torch.from_numpy(a.transpose(2, 0, 1)).cuda()
+            x = (x-torch.tensor([.485, .456, .406], device='cuda')[:, None, None])/torch.tensor([.229, .224, .225], device='cuda')[:, None, None]
+            with torch.no_grad():
+                feature = model.get_intermediate_layers(x[None], n=(11,), norm=True)[0][0].cpu().numpy()
+            timings[phase+'_embed_seconds'] += time.perf_counter()-begin
+            assert feature.shape == (4096, 768) and np.isfinite(feature).all()
+            return feature
+        fit = roles['source_fit']
+        pools = {construction: np.empty((224000, 768), np.float32) for construction in CONSTRUCTIONS}
+        coords = {construction: [] for construction in CONSTRUCTIONS}
+        for i, row in enumerate(fit):
+            feature = embed(row, 'fit')
+            begin = time.perf_counter()
+            for construction, positions in candidates(np, row['path']).items():
+                coords[construction].append(positions)
+                pools[construction][256*i:256*(i+1)] = feature[positions]
+            timings['candidate_copy_seconds'] += time.perf_counter()-begin
+            if (i+1)%100 == 0:
+                print('SOURCE_DINO896', i+1, flush=True)
+        banks = {}
+        for construction in CONSTRUCTIONS:
+            coordinate_sha = hashlib.sha256(np.asarray(coords[construction], dtype='<i8').tobytes()).hexdigest()
+            assert coordinate_sha == preflight['candidate_coordinate_sha256'][construction]
+            for seed in SEEDS:
+                budget.check()
+                method = f'{construction}_s{seed}'
+                begin = time.perf_counter()
+                bank, indices = select_seeded(base, np, pools[construction], seed, budget.deadline)
+                torch.cuda.synchronize()
+                timings['coreset_seconds'][method] = time.perf_counter()-begin
+                hashes[method] = hashlib.sha256(bank.tobytes()).hexdigest()
+                this_ids = []
+                for j, candidate_index in enumerate(indices):
+                    i, k = divmod(int(candidate_index), 256)
+                    cell = int(coords[construction][i][k])
+                    this_ids.append({'method': method, 'construction': construction, 'seed': seed,
+                                     'prototype': j, 'candidate_index': int(candidate_index), 'path': fit[i]['path'],
+                                     'group_key': fit[i]['group_key'], 'camera': fit[i]['camera'],
+                                     'native_grid': 64, 'row': cell//64, 'col': cell%64})
+                if method in OLD_NAMES:
+                    oldname = OLD_NAMES[method]
+                    assert hashes[method] == oldfreeze['bank_hashes'][oldname]
+                    assert len(oldids[oldname]) == 4096
+                    for a, b in zip(this_ids, oldids[oldname]):
+                        assert a['path'] == b['path'] and all(a[key] == int(b[key]) for key in ('prototype', 'row', 'col'))
+                identities.extend(this_ids)
+                banks[method] = torch.from_numpy(bank.copy()).cuda()
+                print('BANK_READY', method, flush=True)
+            del pools[construction]
+            gc.collect()
+        del pools, bank, feature, indices
+        gc.collect()
+        torch.cuda.empty_cache()
+        masks = region_masks(np)
+        for i, row in enumerate(roles['source_calibration']+roles['development']):
+            feature = embed(row, 'query')
+            record = {key: row[key] for key in IDENTITY}
+            for method in METHODS:
+                budget.check()
+                begin = time.perf_counter()
+                distances = base.nearest_squared(feature, banks[method])
+                timings['nearest_seconds'][method] += time.perf_counter()-begin
+                begin = time.perf_counter()
+                summaries.append(summarize(np, row, method, distances, masks))
+                record[method] = float(distances.max())
+                if row['research_role'] == 'source_calibration':
+                    coverage.append({**{key: row[key] for key in IDENTITY}, 'method': method,
+                                     'mean_squared_nearest': float(distances.mean()),
+                                     'p95_squared_nearest': float(np.quantile(distances, .95)),
+                                     'max_squared_nearest': float(distances.max())})
+                if method in OLD_NAMES:
+                    difference = abs(record[method]-float(oldpred[row['path']][OLD_NAMES[method]]))
+                    errors[method] = max(errors[method], difference)
+                    assert difference == 0
+                timings['summarize_seconds'] += time.perf_counter()-begin
+            scores.append(record)
+            if (i+1)%100 == 0:
+                print('QUERY_DINO896', i+1, flush=True)
+        budget.check()
+        peak_cuda = int(torch.cuda.max_memory_allocated())
+        memory = budget.memory_report()
+        del banks, model, feature, distances
+        gc.collect()
+        torch.cuda.empty_cache()
+    gpu_elapsed = time.perf_counter()-gpu_started
+    ram.clear()
+    gc.collect()
+    assert len(scores) == 1135 and len(summaries) == 1135*9 and len(coverage) == 380*9 and len(identities) == 4096*9
+    for filename, data in [('scalar_predictions.csv', scores), ('spatial_statistics.csv', summaries),
+                           ('normal_calibration_coverage.csv', coverage), ('bank_identities.csv', identities)]:
+        csvsave(filename, data)
+    assert sum(path.stat().st_size for path in OUT.rglob('*') if path.is_file()) < plan['resources']['persisted_bytes_limit']
+    record = {'status': 'P1_PREDICTIONS_FROZEN', 'methods': list(METHODS), 'counts': COUNTS,
+              'bank_hashes': hashes, 'reproduced_controls_max_error': errors,
+              'query_rows': 1135, 'fit_embedded_images': 875, 'query_cells': 4096,
+              'gpu_wall_seconds': gpu_elapsed, 'resource_probe_gpu_wall_seconds': probe['gpu_wall_seconds'],
+              'total_p1_gpu_wall_seconds': probe['gpu_wall_seconds']+gpu_elapsed,
+              'worker_wall_seconds': time.perf_counter()-started_total,
+              'peak_cuda_allocated_bytes': peak_cuda, 'host_memory': memory, 'timings': timings,
+              'plan_sha256': sha(OUT/'plan.json'), 'producer_sha256': sha(__file__),
+              'sha256_files': {name: sha(OUT/name) for name in ('scalar_predictions.csv', 'spatial_statistics.csv', 'normal_calibration_coverage.csv', 'bank_identities.csv')},
+              'confirmation_access': 0, 'masks_requested': 0, 'payload_saved': False,
+              'before_development_labels': True,
+              'tie_policy': 'First-index argmax representative plus per-region/full tie counts; no unique-location claim from representative alone.'}
+    assert record['total_p1_gpu_wall_seconds'] <= 1800
+    save('prediction_freeze.json', record)
+    print('P1_PREDICTIONS_FROZEN', flush=True)
+
+
+def safe_failure(error, mode):
+    name = mode+'_failure.json'
+    if not (OUT/name).exists():
+        save(name, {'status': 'STOP_SANITIZED_FAILURE', 'error_type': type(error).__name__,
+                    'stack': [{'file': Path(frame.filename).name, 'line': frame.lineno, 'function': frame.name}
+                              for frame in traceback.extract_tb(error.__traceback__)]})
+    print('WORKER_STOP', mode, type(error).__name__, flush=True)
+
+
+def main():
+    if len(sys.argv) == 3 and sys.argv[1] in ('--probe-worker', '--inference-worker'):
+        if sys.argv[1] == '--probe-worker':
+            resource_probe(sys.argv[2])
+        else:
+            worker(sys.argv[2])
+        return 0
+    assert len(sys.argv) == 2 and sys.argv[1] in ('--resource-precheck', '--run')
+    plan, preflight = check_admission()
+    is_probe = sys.argv[1] == '--resource-precheck'
+    mode = 'probe' if is_probe else 'inference'
+    claim_name = 'probe_claim.json' if is_probe else 'execution_claim.json'
+    assert not (OUT/claim_name).exists()
+    nonce = uuid.uuid4().hex
+    save(claim_name, {'nonce': nonce, 'parent_pid': os.getpid(), 'producer_sha256': sha(__file__), 'mode': mode})
+    previous_wall = 0 if is_probe else read(OUT/'probe_supervisor.json')['wall_seconds']
+    timeout = min(600, 5400-previous_wall) if is_probe else 5400-previous_wall
+    started = time.perf_counter()
+    try:
+        result = subprocess.run([sys.executable, '-B', str(Path(__file__)), '--probe-worker' if is_probe else '--inference-worker', nonce], timeout=timeout)
+        save(mode+'_supervisor.json', {'exit_code': result.returncode, 'timeout': False, 'wall_seconds': time.perf_counter()-started, 'prior_p1_wall_seconds': previous_wall})
+        return result.returncode
+    except subprocess.TimeoutExpired:
+        save(mode+'_supervisor.json', {'exit_code': None, 'timeout': True, 'wall_seconds': time.perf_counter()-started, 'prior_p1_wall_seconds': previous_wall})
+        return 1
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except BaseException as error:
+        if isinstance(error, SystemExit):
+            raise
+        safe_failure(error, 'probe' if any('probe' in arg or 'precheck' in arg for arg in sys.argv) else 'inference')
+        sys.exit(1)

@@ -1,0 +1,554 @@
+{
+  "generated_utc": "2026-10-04T03:25:47.500624+00:00",
+  "status": "PASS",
+  "check_count": 136,
+  "failed": 0,
+  "checks": [
+    {
+      "check": "U/p1/runner_draft.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/runner_draft.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/runner_draft.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p1/runner_draft.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p1/runner_draft.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p1/runner_draft.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "U/p1/analyze_p1.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/analyze_p1.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/analyze_p1.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p1/analyze_p1.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p1/analyze_p1.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p1/analyze_p1.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "U/p1/verify_p1.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/verify_p1.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/verify_p1.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p1/verify_p1.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p1/verify_p1.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p1/verify_p1.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "U/p1/producer_selftest.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/producer_selftest.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p1/producer_selftest.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p1/producer_selftest.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p1/producer_selftest.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p1/producer_selftest.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "U/p2/run_p2.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/run_p2.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/run_p2.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p2/run_p2.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p2/run_p2.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p2/run_p2.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "U/p2/analyze_p2.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/analyze_p2.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/analyze_p2.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p2/analyze_p2.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p2/analyze_p2.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p2/analyze_p2.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "U/p2/verify_p2.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/verify_p2.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/verify_p2.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p2/verify_p2.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p2/verify_p2.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p2/verify_p2.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "U/p2/producer_selftest.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/producer_selftest.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "U/p2/producer_selftest.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "U/p2/producer_selftest.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "U/p2/producer_selftest.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "U/p2/producer_selftest.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "E/runner/run_external_sampling.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "E/runner/run_external_sampling.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "E/runner/run_external_sampling.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "E/runner/run_external_sampling.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "E/runner/run_external_sampling.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "E/runner/run_external_sampling.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "E/runner/candidate_plan.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "E/runner/candidate_plan.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "E/runner/candidate_plan.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "E/runner/candidate_plan.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "E/runner/candidate_plan.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "E/runner/candidate_plan.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "E/analyze_results.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "E/analyze_results.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "E/analyze_results.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "E/analyze_results.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "E/analyze_results.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "E/analyze_results.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "E/verification/verify_results.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "E/verification/verify_results.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "E/verification/verify_results.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "E/verification/verify_results.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "E/verification/verify_results.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "E/verification/verify_results.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "E/verification/compare_results.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "E/verification/compare_results.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "E/verification/compare_results.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "E/verification/compare_results.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "E/verification/compare_results.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "E/verification/compare_results.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "Y/run_analysis.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "Y/run_analysis.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "Y/run_analysis.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "Y/run_analysis.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "Y/run_analysis.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "Y/run_analysis.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "Y/verify_query_support.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "Y/verify_query_support.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "Y/verify_query_support.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "Y/verify_query_support.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "Y/verify_query_support.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "Y/verify_query_support.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "X/run_spatial.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "X/run_spatial.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "X/run_spatial.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "X/run_spatial.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "X/run_spatial.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "X/run_spatial.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "X/analyze_spatial.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "X/analyze_spatial.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "X/analyze_spatial.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "X/analyze_spatial.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "X/analyze_spatial.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "X/analyze_spatial.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "X/verify_intervention_static.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "X/verify_intervention_static.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "X/verify_intervention_static.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "X/verify_intervention_static.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "X/verify_intervention_static.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "X/verify_intervention_static.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "X/verify_primary_root.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "X/verify_primary_root.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "X/verify_primary_root.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "X/verify_primary_root.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "X/verify_primary_root.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "X/verify_primary_root.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "X/verify_analysis_repair.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "X/verify_analysis_repair.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "X/verify_analysis_repair.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "X/verify_analysis_repair.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "X/verify_analysis_repair.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "X/verify_analysis_repair.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "B/run_coverage.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "B/run_coverage.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "B/run_coverage.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "B/run_coverage.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "B/run_coverage.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "B/run_coverage.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "S/static_reference_audit/static_core.py: original_hash",
+      "passed": true
+    },
+    {
+      "check": "S/static_reference_audit/static_core.py: release_hash",
+      "passed": true
+    },
+    {
+      "check": "S/static_reference_audit/static_core.py: sizes",
+      "passed": true
+    },
+    {
+      "check": "S/static_reference_audit/static_core.py: archive_only_extension",
+      "passed": true
+    },
+    {
+      "check": "S/static_reference_audit/static_core.py: syntax_only",
+      "passed": true
+    },
+    {
+      "check": "S/static_reference_audit/static_core.py: no_absolute_windows_prefix",
+      "passed": true
+    },
+    {
+      "check": "provenance/licenses/patchcore-LICENSE.txt: exact_hash",
+      "passed": true
+    },
+    {
+      "check": "provenance/licenses/patchcore-NOTICE.txt: exact_hash",
+      "passed": true
+    },
+    {
+      "check": "allowlist_count_22",
+      "passed": true
+    },
+    {
+      "check": "no_extra_archived_code",
+      "passed": true
+    }
+  ],
+  "scope": "Only archive provenance and syntax, not algorithm execution or new science.",
+  "source_manifest_sha256": "61641aed2dbdf55e721dd7725cb02f1ba4be64e946a4de53817f447fb1de0919"
+}

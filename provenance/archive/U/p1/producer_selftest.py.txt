@@ -1,0 +1,46 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""CPU-only integrity checks for new candidate and readout logic."""
+from pathlib import Path
+import importlib.util
+import json
+import sys
+import time
+import numpy as np
+sys.dont_write_bytecode=True
+out=Path(__file__).parent
+spec=importlib.util.spec_from_file_location('p1_cpu_only',out/'runner_draft.py')
+r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
+start=time.perf_counter()
+checks=[]
+def check(name,x):
+    checks.append({'name':name,'pass':bool(x)})
+    assert x,name
+masks=r.region_masks(np)
+check('four_phase_partition',np.all(sum(masks['parity'+p].astype(int) for p in ('00','01','10','11'))==1))
+check('four_inner_partition',np.array_equal(sum(masks['interior_parity'+p].astype(int) for p in ('00','01','10','11')),masks['interior'].astype(int)))
+row=dict(category='synthetic',path='synthetic/normal.jpg',group_key='synthetic::one',camera='1',research_role='source_calibration')
+flat=np.arange(1,4097,dtype=np.float32)
+summary=r.summarize(np,row,'synthetic',flat,masks)
+check('full_max',summary['max']==4096)
+check('peak_location',summary['argmax_row']==63 and summary['argmax_col']==63)
+check('phase_max_closure',max(summary['parity'+p+'_max'] for p in ('00','01','10','11'))==summary['max'])
+check('unique_tie',summary['image_max_tie_count']==1)
+ones=r.summarize(np,row,'synthetic',np.ones(4096,dtype=np.float32),masks)
+check('all_ties',ones['image_max_tie_count']==4096)
+check('inner_phase_ties',all(ones['interior_parity'+p+'_max_tie_count']==961 for p in ('00','01','10','11')))
+for i in range(3):
+    c=r.candidates(np,f'synthetic/{i}.jpg')
+    c2=r.candidates(np,f'synthetic/{i}.jpg')
+    check(f'candidate_deterministic_{i}',all(np.array_equal(c[k],c2[k]) for k in c))
+    check(f'candidate_unique_{i}',all(len(set(v.tolist()))==256 for v in c.values()))
+    check(f'odd_parity_{i}',np.all((c['odd']//64)%2==1) and np.all(c['odd']%2==1))
+    p=(c['balanced']//64%2)*2+c['balanced']%2
+    check(f'balanced_counts_{i}',np.array_equal(np.bincount(p,minlength=4),[64]*4))
+    check(f'coarse_match_{i}',np.array_equal((c['odd']//64//2)*32+c['odd']%64//2,(c['balanced']//64//2)*32+c['balanced']%64//2))
+value={'status':'PASS','checks':checks,'count':len(checks),'wall_seconds':time.perf_counter()-start,
+       'access':{'gpu':0,'new_pixels':0,'confirmation':0},
+       'timing_note':'Executed after resource probe and during real-image acquisition, before prediction freeze or any new performance analysis.'}
+(out/'producer_selftest.json').write_text(json.dumps(value,indent=2),encoding='utf8')
+print(json.dumps({'status':'PASS','checks':len(checks),'wall_seconds':value['wall_seconds']}))

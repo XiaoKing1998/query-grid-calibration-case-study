@@ -1,0 +1,39 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Check that the byte-accounting repair did not change scientific results."""
+import importlib.util
+import hashlib
+import json
+from pathlib import Path
+
+out = Path(__file__).resolve().parent
+old = json.loads((out / 'analysis_result_v2.json').read_text(encoding='utf-8'))
+new = json.loads((out / 'analysis_result.json').read_text(encoding='utf-8'))
+fields = ['primary', 'secondary', 'migration', 'usage_summary', 'tie_summary']
+checks = {field: old[field] == new[field] for field in fields}
+assert all(checks.values())
+assert new['status'] == 'INDEPENDENT_SPATIAL_ANALYSIS_PASS'
+report = {'status': 'PASS_SCIENTIFIC_OUTPUTS_UNCHANGED_BY_BYTE_ACCOUNTING_REPAIR', 'exact_equal_sections': checks}
+(out / 'analysis_repair_comparison.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+final_status = {
+    'status': 'PASS_FINAL_INDEPENDENT_ANALYSIS',
+    'canonical_result': 'analysis_result.json',
+    'canonical_report': 'analysis_report.md',
+    'checks_total': new['checks_total'],
+    'checks_failed': new['checks_failed'],
+    'diagnostic_gate_pass': new['primary']['diagnostic_gate_pass'],
+    'innovation_proven': False,
+    'analysis_sha256': hashlib.sha256((out / 'analyze_spatial.py').read_bytes()).hexdigest(),
+    'result_sha256': hashlib.sha256((out / 'analysis_result.json').read_bytes()).hexdigest(),
+    'repair_comparison_pass': all(checks.values()),
+    'historical_failures_retained': ['analysis_failure_v1.json', 'analysis_failure_v2.json', 'analysis_failure.json'],
+    'legacy_analysis_failure_json_is_historical_v2': True,
+    'resolution': 'The final analysis completed successfully after a hash-only vendor-path repair and a Windows newline byte-accounting repair. Scientific outputs are exactly unchanged by the second repair.'
+}
+(out / 'final_analysis_status.json').write_text(json.dumps(final_status, indent=2), encoding='utf-8')
+spec = importlib.util.spec_from_file_location('independent_analysis', out / 'analyze_spatial.py')
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+receipt = module.persistence_receipt(104857600)
+print(json.dumps({'comparison': report, 'final_status': final_status, 'persistence': receipt}, indent=2))

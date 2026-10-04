@@ -1,0 +1,41 @@
+{
+  "status": "MATCHING_INCONCLUSIVE",
+  "failed_cameras": [
+    "5"
+  ],
+  "assignment_passed": false,
+  "camera_assignment_summary": {
+    "1": {
+      "all_slots_legal": true,
+      "assignment_total_cost": 66.11329121796862,
+      "sentinel_selections": 0,
+      "legal_image_phase_edges": 88
+    },
+    "2": {
+      "all_slots_legal": true,
+      "assignment_total_cost": 77.70946641013045,
+      "sentinel_selections": 0,
+      "legal_image_phase_edges": 61
+    },
+    "3": {
+      "all_slots_legal": true,
+      "assignment_total_cost": 65.74825745553338,
+      "sentinel_selections": 0,
+      "legal_image_phase_edges": 90
+    },
+    "4": {
+      "all_slots_legal": true,
+      "assignment_total_cost": 65.6675218774412,
+      "sentinel_selections": 0,
+      "legal_image_phase_edges": 84
+    },
+    "5": {
+      "all_slots_legal": false,
+      "assignment_total_cost": 2071.948251781058,
+      "sentinel_selections": 2,
+      "legal_image_phase_edges": 52
+    }
+  },
+  "K": 240,
+  "query_pixels_requested": 0
+}

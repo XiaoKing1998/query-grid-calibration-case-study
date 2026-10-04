@@ -1,0 +1,417 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Conditional P2 query analysis. Run only after both fit gates and query freeze.
+
+No producer imports, GPU, transport, pixels, masks, or confirmation scores.
+"""
+from collections import Counter, defaultdict
+from pathlib import Path
+import argparse
+import csv
+import ctypes
+import hashlib
+import json
+import math
+import sys
+import time
+import traceback
+import zipfile
+import numpy as np
+
+OUT = Path(__file__).resolve().parent
+P1 = OUT.parent / 'p1'
+REPO = Path('${PROJECT_ROOT}')
+METADATA = REPO / 'artifacts/ram_ad_20260918/realiad_metadata_admission/realiad_jsons.zip'
+METHODS = ('base', 'target', 'sham')
+FIELDS = ('category', 'path', 'group_key', 'camera', 'research_role')
+PHASES = ('00', '01', '10', '11')
+READOUTS = ('full',) + tuple('parity' + p for p in PHASES) + tuple('interior_parity' + p for p in PHASES)
+PAIRS = (('target', 'sham'), ('target', 'base'), ('sham', 'base'))
+METRICS = ('normal_group_fpr', 'supported_group_tpr', 'any_group_tpr')
+START, CPU_START = time.perf_counter(), time.process_time()
+CHECKS = []
+
+
+def read(path):
+    return json.loads(path.read_text(encoding='utf-8-sig'))
+
+
+def csvrows(path):
+    with path.open(encoding='utf-8-sig', newline='') as stream:
+        return list(csv.DictReader(stream))
+
+
+def sha(path):
+    result = hashlib.sha256()
+    with path.open('rb') as stream:
+        for block in iter(lambda: stream.read(2**20), b''):
+            result.update(block)
+    return result.hexdigest()
+
+
+def check(name, value):
+    CHECKS.append({'name': name, 'passed': bool(value)})
+    if not value:
+        raise AssertionError(name)
+
+
+def save(name, value):
+    with (OUT / name).open('x', encoding='utf-8') as stream:
+        json.dump(value, stream, ensure_ascii=False, indent=2, allow_nan=False)
+
+
+def savecsv(name, rows):
+    with (OUT / name).open('x', encoding='utf-8', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def peak_rss():
+    class Counters(ctypes.Structure):
+        _fields_ = [('cb', ctypes.c_ulong), ('faults', ctypes.c_ulong)] + [(name, ctypes.c_size_t) for name in
+            ('PeakWorkingSetSize', 'WorkingSetSize', 'QuotaPeakPagedPoolUsage', 'QuotaPagedPoolUsage',
+             'QuotaPeakNonPagedPoolUsage', 'QuotaNonPagedPoolUsage', 'PagefileUsage', 'PeakPagefileUsage')]
+    kernel, psapi = ctypes.WinDLL('kernel32'), ctypes.WinDLL('psapi')
+    kernel.GetCurrentProcess.restype = ctypes.c_void_p
+    psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong]
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    if not psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        raise OSError('memory query failed')
+    return int(counters.PeakWorkingSetSize)
+
+
+def interval(values):
+    return [float(v) for v in np.quantile(values, [.025, .975], method='linear')]
+
+
+def summarize_draws(values, point):
+    return {'point': float(point), 'ci95': interval(values), 'bootstrap_mean': float(values.mean()),
+            'fraction_positive': float(np.mean(values > 0))}
+
+
+def binomial_interval(k, n):
+    def cdf(j, p):
+        return sum(math.comb(n, i) * p**i * (1 - p)**(n - i) for i in range(j + 1))
+    if k == 0:
+        lower = 0.
+    else:
+        left, right = 0., 1.
+        for _ in range(100):
+            mid = (left + right) / 2
+            if 1 - cdf(k - 1, mid) < .025:
+                left = mid
+            else:
+                right = mid
+        lower = (left + right) / 2
+    if k == n:
+        upper = 1.
+    else:
+        left, right = 0., 1.
+        for _ in range(100):
+            mid = (left + right) / 2
+            if cdf(k, mid) > .025:
+                left = mid
+            else:
+                right = mid
+        upper = (left + right) / 2
+    return [lower, upper]
+
+
+def region_analysis(vectors, plan):
+    count, seed = plan['bootstrap']['region_draws'], plan['bootstrap']['region_seed']
+    draw = np.random.Generator(np.random.PCG64(seed)).integers(0, len(vectors['full']),
+            size=(count, len(vectors['full'])), dtype=np.int64)
+    values = dict(vectors)
+    values['non11_mean'] = sum(values['interior_parity' + phase] for phase in ('00', '01', '10')) / 3
+    values['interaction_non11_minus11'] = values['non11_mean'] - values['interior_parity11']
+    results = {name: summarize_draws(vector[draw].mean(axis=1), vector.mean()) for name, vector in values.items()}
+    rule = plan['regional_prediction']
+    flags = {
+        'each_non11_positive': all(results['interior_parity' + p]['point'] > 0 for p in ('00', '01', '10')),
+        'non11_mean_min': results['non11_mean']['point'] >= rule['non11_mean_min'],
+        'interaction_min': results['interaction_non11_minus11']['point'] >= rule['interaction_min'],
+        'interaction_ci_lower': results['interaction_non11_minus11']['ci95'][0] > rule['interaction_ci95_lower_gt'],
+        'abs_g11_max': abs(results['interior_parity11']['point']) <= rule['abs_g11_max'],
+        'g11_ci_inside': results['interior_parity11']['ci95'][0] >= rule['g11_ci95_inside'][0] and
+                        results['interior_parity11']['ci95'][1] <= rule['g11_ci95_inside'][1],
+        'full_g_positive': results['full']['point'] > rule['full_g_gt'],
+    }
+    return results, {key: bool(value) for key, value in flags.items()}, draw
+
+
+def operation_analysis(cal, normal, supported, any_bad, plan):
+    rank = math.ceil(.95 * (len(cal) + 1))
+    if rank > len(cal):
+        raise ValueError('Unavailable observed calibration rank')
+    tau = np.partition(cal, rank - 1, axis=0)[rank - 1]
+    alarms = (normal > tau, supported > tau, any_bad > tau)
+    point = np.asarray([v.mean(axis=0) for v in alarms]).T
+    rng = np.random.Generator(np.random.PCG64(plan['bootstrap']['operation_seed']))
+    count = plan['bootstrap']['operation_draws']
+    cdraw = rng.integers(0, len(cal), size=(count, len(cal)), dtype=np.int64)
+    ndraw = rng.integers(0, len(normal), size=(count, len(normal)), dtype=np.int64)
+    adraw = rng.integers(0, len(supported), size=(count, len(supported)), dtype=np.int64)
+    tau_draw = np.partition(cal[cdraw], rank - 1, axis=1)[:, rank - 1, :]
+    distributions = {'fixed_calibration': [], 'calibration_only': [], 'joint': []}
+    for scores, draw in ((normal, ndraw), (supported, adraw), (any_bad, adraw)):
+        distributions['fixed_calibration'].append((scores[draw] > tau).mean(axis=1))
+        distributions['calibration_only'].append((scores[None, :, :] > tau_draw[:, None, :]).mean(axis=1))
+        distributions['joint'].append((scores[draw] > tau_draw[:, None, :]).mean(axis=1))
+    return tau, alarms, point, tau_draw, {key: np.stack(value, axis=2) for key, value in distributions.items()}, (cdraw, ndraw, adraw)
+
+
+def admit(plan):
+    check('plan', plan['status'] == 'FROZEN_BEFORE_P2_FIT_PIXELS' and tuple(plan['methods']) == METHODS)
+    check('random_plan', plan['bootstrap']['region_seed'] == 20261032 and plan['bootstrap']['operation_seed'] == 20261033 and
+          plan['bootstrap']['region_draws'] == plan['bootstrap']['operation_draws'] == 5000)
+    check('matching_pass', read(OUT / 'matching_audit.json')['assignment_passed'] is True)
+    check('coverage_pass', read(OUT / 'fit_coverage_audit.json')['status'] == 'FIT_COVERAGE_MATCH_PASS')
+    intervention = read(OUT / 'intervention_freeze.json')
+    check('intervention_before_query', intervention['status'] == 'FIT_MATCH_FROZEN_BEFORE_CALIBRATION_AND_DEVELOPMENT_PIXELS' and
+          intervention['fit_coverage_pass'] is True and intervention['matching_pass'] is True and intervention['query_pixels_requested'] == 0)
+    freeze = read(OUT / 'prediction_freeze.json')
+    check('query_complete', freeze['status'] == 'P2_PREDICTIONS_FROZEN' and freeze['query_rows'] == 1135 and freeze['query_cells'] == 4096)
+    check('plan_bound', freeze['plan_sha256'] == intervention['plan_sha256'] == sha(OUT / 'plan.json'))
+    check('code_bound', freeze['producer_sha256'] == intervention['producer_sha256'] == sha(OUT / 'run_p2.py'))
+    check('hash_freeze_order', freeze['bank_hashes'] == intervention['bank_hashes'])
+    for name, expected in freeze['sha256_files'].items():
+        check('frozen_file:' + name, sha(OUT / name) == expected)
+    check('no_extra_access', freeze['confirmation_access'] == freeze['masks_requested'] == 0 and freeze['payload_saved'] is False)
+    check('base_exact_producer', freeze['reproduced_controls_max_error']['base'] == 0)
+    old_freeze = read(P1 / 'prediction_freeze.json')
+    check('base_exact_hash', freeze['bank_hashes']['base'] == old_freeze['bank_hashes']['odd_s0'])
+    supervisor, receipt = read(OUT / 'supervisor.json'), read(OUT / 'resource_receipt.json')
+    check('supervisor_success', supervisor['exit_code'] == 0 and supervisor['timeout'] is False)
+    check('total_execution_wall', supervisor['prior_p1_wall_seconds'] + supervisor['wall_seconds'] <= 5400)
+    check('total_gpu_budget', receipt['total_p1_p2_gpu_wall_seconds'] == freeze['total_p1_p2_gpu_wall_seconds'] <= 1800)
+    check('query_images', receipt['query_images_decoded'] == 1135)
+    old_rows = {r['path']: r for r in csvrows(P1 / 'scalar_predictions.csv')}
+    scalar = csvrows(OUT / 'scalar_predictions.csv')
+    check('paths', len(scalar) == len({r['path'] for r in scalar}) == 1135 and {r['path'] for r in scalar} == set(old_rows))
+    check('identity_exact', all(all(r[key] == old_rows[r['path']][key] for key in FIELDS) for r in scalar))
+    check('base_scalar_exact', all(float(r['base']) == float(old_rows[r['path']]['odd_s0']) for r in scalar))
+    check('roles', dict(Counter(r['research_role'] for r in scalar)) == {'source_calibration': 380, 'development': 755})
+    check('positive_finite_scores', all(float(r[m]) > 0 and math.isfinite(float(r[m])) for r in scalar for m in METHODS))
+    identities = {r['path']: r for r in scalar}
+    groups = defaultdict(list)
+    for row in scalar:
+        groups[row['group_key']].append(row)
+    check('227_groups', len(groups) == 227)
+    check('five_cameras', all(len(rs) == 5 and sorted(r['camera'] for r in rs) == ['1', '2', '3', '4', '5'] and
+                            len({r['research_role'] for r in rs}) == 1 for rs in groups.values()))
+    spatial_rows = csvrows(OUT / 'spatial_statistics.csv')
+    check('spatial_complete', len(spatial_rows) == len({(r['method'], r['path']) for r in spatial_rows}) == 3405)
+    spatial = {}
+    for row in spatial_rows:
+        method, path = row['method'], row['path']
+        check('spatial_identity:' + method + ':' + path, method in METHODS and path in identities and
+              all(row[k] == identities[path][k] for k in FIELDS))
+        full = float(row['max'])
+        phases = [float(row['parity' + phase + '_max']) for phase in PHASES]
+        inner = [float(row['interior_parity' + phase + '_max']) for phase in PHASES]
+        check('max_relations:' + method + ':' + path, full == float(identities[path][method]) and max(phases) == full and
+              all(0 < a <= b for a, b in zip(inner, phases)) and all(math.isfinite(v) for v in [full, *phases, *inner]))
+        spatial[(method, path)] = row
+    with zipfile.ZipFile(METADATA) as archive:
+        official = json.loads(archive.read('realiad_jsons/plastic_nut.json'))
+    prefix = official['meta']['prefix'].rstrip('/')
+    labels = {}
+    for split in ('train', 'test'):
+        for record in official[split]:
+            path = prefix + '/' + record['image_path'].lstrip('/')
+            if path not in identities:
+                continue
+            check('official_unique:' + path, path not in labels)
+            check('official_split:' + path, split == ('train' if identities[path]['research_role'] == 'source_calibration' else 'test'))
+            labels[path] = int(record['anomaly_class'] != 'OK')
+    del official
+    check('labels_whitelist', set(labels) == set(identities) and sum(labels.values()) == 258)
+    check('calibration_normal', all(labels[p] == 0 for p, r in identities.items() if r['research_role'] == 'source_calibration'))
+    return identities, groups, spatial, labels
+
+
+def main():
+    check('outputs_new', not (OUT / 'analysis_result.json').exists())
+    plan = read(OUT / 'plan.json')
+    identities, groups, spatial, labels = admit(plan)
+    cal_keys = sorted(g for g, rs in groups.items() if rs[0]['research_role'] == 'source_calibration')
+    dev_keys = sorted(g for g, rs in groups.items() if rs[0]['research_role'] == 'development')
+    normal_keys = [g for g in dev_keys if not any(labels[r['path']] for r in groups[g])]
+    bad_keys = [g for g in dev_keys if any(labels[r['path']] for r in groups[g])]
+    check('counts', (len(cal_keys), len(normal_keys), len(bad_keys)) == (76, 44, 107))
+    vectors_by_pair = {}
+    for candidate, reference in PAIRS:
+        vector = {}
+        for readout in READOUTS:
+            field = 'max' if readout == 'full' else readout + '_max'
+            vector[readout] = np.asarray([np.mean([math.log(float(spatial[(reference, r['path'])][field]) /
+                                                                  float(spatial[(candidate, r['path'])][field])) for r in groups[g]])
+                                          for g in cal_keys], dtype=np.float64)
+        vectors_by_pair[(candidate, reference)] = vector
+    regional, flags, regional_draws = region_analysis(vectors_by_pair[('target', 'sham')], plan)
+    descriptive = []
+    for (candidate, reference), vectors in vectors_by_pair.items():
+        for readout, vector in vectors.items():
+            descriptive.append({'candidate': candidate, 'reference': reference, 'readout': readout,
+                                'sign': 'log(reference/candidate)', **summarize_draws(vector[regional_draws].mean(axis=1), vector.mean())})
+    group_regions = []
+    for i, key in enumerate(cal_keys):
+        values = {name: float(vector[i]) for name, vector in vectors_by_pair[('target', 'sham')].items()}
+        values['non11_mean'] = sum(values['interior_parity' + phase] for phase in ('00', '01', '10')) / 3
+        values['interaction_non11_minus11'] = values['non11_mean'] - values['interior_parity11']
+        group_regions.append({'group_key': key, **values})
+
+    def group_scores(keys, supported_only=False):
+        return np.asarray([[max(float(r[m]) for r in groups[g] if not supported_only or labels[r['path']])
+                            for m in METHODS] for g in keys], dtype=np.float64)
+    cal = group_scores(cal_keys)
+    normal, supported, any_bad = group_scores(normal_keys), group_scores(bad_keys, True), group_scores(bad_keys)
+    tau, alarms, point, tau_draws, boot, draws = operation_analysis(cal, normal, supported, any_bad, plan)
+    operations, bootstrap_methods, group_predictions, calibration_rows = [], [], [], []
+    for j, method in enumerate(METHODS):
+        fp, tp, any_tp = [int(values[:, j].sum()) for values in alarms]
+        cp = binomial_interval(fp, 44)
+        operations.append({'method': method, 'threshold': float(tau[j]), 'normal_false_positive_groups': fp,
+                           'supported_detected_groups': tp, 'any_detected_groups': any_tp,
+                           'normal_group_fpr': fp / 44, 'supported_group_tpr': tp / 107, 'any_group_tpr': any_tp / 107,
+                           'normal_fpr_binomial95_lower': cp[0], 'normal_fpr_binomial95_upper': cp[1]})
+        for regime, values in boot.items():
+            for q, metric in enumerate(METRICS):
+                bootstrap_methods.append({'method': method, 'regime': regime, 'metric': metric,
+                                          **summarize_draws(values[:, j, q], point[j, q])})
+        for i, key in enumerate(cal_keys):
+            calibration_rows.append({'method': method, 'group_key': key, 'score': float(cal[i, j])})
+        for keys, scores, is_bad in ((normal_keys, normal, False), (bad_keys, any_bad, True)):
+            for i, key in enumerate(keys):
+                group_predictions.append({'method': method, 'group_key': key, 'is_anomaly': int(is_bad),
+                                          'full_group_score': float(scores[i, j]), 'threshold': float(tau[j]),
+                                          'any_alarm': int(scores[i, j] > tau[j]),
+                                          'supported_alarm': int(is_bad and supported[i, j] > tau[j])})
+    comparisons, bootstrap_contrasts = [], []
+    for candidate, reference in PAIRS:
+        j, k = METHODS.index(candidate), METHODS.index(reference)
+        comparisons.append({'candidate': candidate, 'reference': reference,
+                            'delta_fpr': float(point[j, 0] - point[k, 0]),
+                            'delta_supported_tpr': float(point[j, 1] - point[k, 1]),
+                            'delta_any_tpr': float(point[j, 2] - point[k, 2]),
+                            'normal_candidate_only_alarm': int(np.sum(alarms[0][:, j] & ~alarms[0][:, k])),
+                            'normal_reference_only_alarm': int(np.sum(~alarms[0][:, j] & alarms[0][:, k]))})
+        for regime, values in boot.items():
+            for q, metric in enumerate(METRICS):
+                bootstrap_contrasts.append({'candidate': candidate, 'reference': reference, 'regime': regime,
+                                           'metric': metric, **summarize_draws(values[:, j, q] - values[:, k, q], point[j, q] - point[k, q])})
+    result = {'status': 'P2_QUERY_ANALYSIS_COMPLETE_PENDING_INDEPENDENT_VERIFICATION',
+              'regional_endpoints': regional, 'regional_gate_components': flags,
+              'regional_gate_pass': bool(all(flags.values())), 'normal_readout_contrasts': descriptive,
+              'operating_points': operations, 'paired_contrasts': comparisons,
+              'bootstrap_methods': bootstrap_methods, 'bootstrap_contrasts': bootstrap_contrasts,
+              'threshold_distributions': [{'method': method, **summarize_draws(tau_draws[:, j], tau[j]),
+                                           'distinct_values': int(len(np.unique(tau_draws[:, j])))} for j, method in enumerate(METHODS)],
+              'bootstrap_receipt': {'region_seed': 20261032, 'operation_seed': 20261033, 'draws': 5000,
+                                    'operation_allocation_order': ['calibration(5000,76)', 'normal_development(5000,44)', 'abnormal_development(5000,107)'],
+                                    'groups_sorted_by': 'group_key', 'dtype': 'int64',
+                                    'draw_sha256': {name: hashlib.sha256(value.tobytes()).hexdigest() for name, value in
+                                                   zip(('regional', 'operation_calibration', 'operation_normal', 'operation_abnormal'), (regional_draws, *draws))}},
+              'decision': {'fit_gates_passed_before_query': True, 'regional_prediction_pass': bool(all(flags.values())),
+                           'p3_admission_design_eligible': bool(all(flags.values())), 'confirmation_access_authorized_by_this_analysis': False,
+                           'old_three_scientific_gates_remain_failed': True, 'main_contribution_established': False},
+              'limitations': ['Fixed-bank repeated development; no independent confirmation', 'Regional gates test specified summaries only, not full feature geometry or positional encoding causation',
+                              '44 normal groups cannot establish population equal risk', 'Supported means abnormal-view alarm, not correct defect location',
+                              'Bootstrap cannot create unseen normal tails or account for fit/matching choice uncertainty'],
+              'resource_receipt': {'wall_seconds_before_output': time.perf_counter() - START, 'cpu_seconds_before_output': time.process_time() - CPU_START,
+                                   'peak_rss_bytes': peak_rss(), 'gpu': 0, 'network': 0, 'new_pixels_masks_confirmation_scores': 0,
+                                   'command': [sys.executable, '-B', str(Path(__file__).resolve())]}}
+    inputs = ['plan.json', 'protocol.md', 'run_p2.py', 'matching_audit.json', 'fit_coverage_audit.json',
+              'intervention_freeze.json', 'prediction_freeze.json', 'supervisor.json', 'resource_receipt.json',
+              'scalar_predictions.csv', 'spatial_statistics.csv', 'normal_calibration_coverage.csv']
+    admission = {'status': 'PASS_P2_QUERY_ANALYSIS_ADMISSION', 'checks': len(CHECKS), 'failed': 0,
+                 'input_sha256': {str(OUT / name): sha(OUT / name) for name in inputs},
+                 'analysis_sha256': sha(Path(__file__)), 'metadata_sha256': sha(METADATA),
+                 'p1_scalar_sha256': sha(P1 / 'scalar_predictions.csv'), 'numpy': np.__version__, 'python': sys.version}
+    savecsv('analysis_primary_groups.csv', group_regions)
+    savecsv('analysis_operating_points.csv', operations)
+    savecsv('analysis_paired_contrasts.csv', comparisons)
+    savecsv('analysis_group_predictions.csv', group_predictions)
+    savecsv('analysis_calibration_groups.csv', calibration_rows)
+    save('analysis_admission.json', admission)
+    save('analysis_result.json', result)
+    report = ['# P2 条件性query分析', '', '状态：计算完成，等待独立核验。', '',
+              '| 正常log(sham/target)端点 | 点估计 | 条件95%区间 |', '|---|---:|---|']
+    for name in ('interior_parity00', 'interior_parity01', 'interior_parity10', 'interior_parity11', 'non11_mean', 'interaction_non11_minus11', 'full'):
+        value = regional[name]
+        report.append(f"| {name} | {value['point']:.8f} | [{value['ci95'][0]:.8f}, {value['ci95'][1]:.8f}] |")
+    report += ['', f'全部冻结区域门通过：{all(flags.values())}。', '',
+               '| 方法 | group阈值 | FP/44 | supported/107 | any/107 |', '|---|---:|---:|---:|---:|']
+    for row in operations:
+        report.append(f"| {row['method']} | {row['threshold']:.6f} | {row['normal_false_positive_groups']} | {row['supported_detected_groups']} | {row['any_detected_groups']} |")
+    report += ['', '完整base/target/sham工作点、target−sham/target−base/sham−base及fixed/cal-only/joint全部区间见analysis_result.json。',
+               '主要操作结果始终使用完整4096格；内部相位各961格仅检验预定机制。',
+               '区域bootstrap5000次seed20261032，操作bootstrap5000次seed20261033，采集组配对，不把视图或格点当独立样本。',
+               '所有门通过仅允许设计P3准入；失败或不确定结束本主线，不追加第三轮诊断。',
+               '即使通过，也不能认定位置编码因果、全部特征几何已匹配、总体等风险、缺陷定位正确或论文主贡献成立。']
+    with (OUT / 'analysis_report.md').open('x', encoding='utf-8') as stream:
+        stream.write('\n'.join(report) + '\n')
+    check('total_saved_budget', sum(p.stat().st_size for folder in (OUT, P1) for p in folder.rglob('*') if p.is_file()) <= plan['resources']['persisted_bytes'])
+    save('analysis_completion.json', {'status': 'COMPLETE_PENDING_INDEPENDENT_VERIFICATION',
+                                      'result_sha256': sha(OUT / 'analysis_result.json'), 'checks': len(CHECKS), 'failed': 0,
+                                      'wall_seconds': time.perf_counter() - START, 'cpu_seconds': time.process_time() - CPU_START,
+                                      'peak_rss_bytes': peak_rss()})
+    print(json.dumps(result['decision']))
+
+
+def self_test():
+    plan = {'bootstrap': {'region_draws': 64, 'region_seed': 20261032, 'operation_draws': 64, 'operation_seed': 20261033},
+            'regional_prediction': {'non11_mean_min': .02, 'interaction_min': .02, 'interaction_ci95_lower_gt': 0,
+                                    'abs_g11_max': .01, 'g11_ci95_inside': [-.02, .02], 'full_g_gt': 0}}
+    vectors = {'full': np.full(76, .03), **{'interior_parity' + phase: np.full(76, value)
+                                        for phase, value in zip(PHASES, (.03, .04, .05, 0.))}}
+    estimates, flags, draws = region_analysis(vectors, plan)
+    check('selftest_positive_regional_prediction', all(flags.values()))
+    check('selftest_equal_phase_average', abs(estimates['non11_mean']['point'] - .04) < 1e-14)
+    check('selftest_direct_interaction', abs(estimates['interaction_non11_minus11']['point'] - .04) < 1e-14)
+    changed = dict(vectors)
+    changed['interior_parity11'] = np.full(76, .03)
+    other, failed, _ = region_analysis(changed, plan)
+    check('selftest_non11_specificity_can_fail', not failed['abs_g11_max'] and not failed['g11_ci_inside'] and not failed['interaction_min'])
+    changed = dict(vectors)
+    changed['interior_parity00'] = np.full(76, -.01)
+    check('selftest_no_cherry_pick_phase', not region_analysis(changed, plan)[1]['each_non11_positive'])
+    def columns(vector):
+        return np.column_stack([vector, 2 * vector, 3 * vector])
+    cal = columns(np.arange(1, 77, dtype=np.float64))
+    normal = columns(np.arange(51, 95, dtype=np.float64))
+    support = columns(np.arange(21, 128, dtype=np.float64))
+    any_bad = columns(np.arange(31, 138, dtype=np.float64))
+    tau, alarms, point, tau_b, boot, draw = operation_analysis(cal, normal, support, any_bad, plan)
+    check('selftest_rank74', np.array_equal(tau, [74, 148, 222]))
+    check('selftest_strict_alarm', not alarms[0][23].any() and alarms[0][24].all())
+    check('selftest_pairing', all(np.array_equal(values[:, 0], values[:, 1]) and np.array_equal(values[:, 1], values[:, 2]) for values in boot.values()))
+    check('selftest_supported_vs_any', (point[:, 1] < point[:, 2]).all())
+    for b in range(64):
+        thresholds = np.asarray([sorted(cal[draw[0][b], j])[73] for j in range(3)])
+        check('selftest_tau:' + str(b), np.array_equal(thresholds, tau_b[b]))
+        for q, (scores, indices) in enumerate(((normal, draw[1]), (support, draw[2]), (any_bad, draw[2]))):
+            check('selftest_joint:' + str(b) + ':' + str(q), np.array_equal((scores[indices[b]] > thresholds).mean(axis=0), boot['joint'][b, :, q]))
+    check('selftest_zero_fp_uncertainty', abs(binomial_interval(0, 44)[1] - (1 - .025**(1 / 44))) < 1e-12)
+    result = {'status': 'PASS_SYNTHETIC_ONLY', 'checks': len(CHECKS), 'failed': 0, 'research_inputs_read': 0,
+              'gpu': 0, 'network': 0, 'wall_seconds': time.perf_counter() - START,
+              'cpu_seconds': time.process_time() - CPU_START, 'peak_rss_bytes': peak_rss(),
+              'analysis_sha256': sha(Path(__file__)), 'numpy': np.__version__}
+    save('analysis_selftest.json', result)
+    print(json.dumps(result))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--self-test', action='store_true')
+    args = parser.parse_args()
+    try:
+        self_test() if args.self_test else main()
+    except Exception as error:
+        save('analysis_failure_' + time.strftime('%Y%m%d_%H%M%S') + '.json',
+             {'status': 'FAILED_NO_SCIENTIFIC_CONCLUSION', 'error': repr(error), 'traceback': traceback.format_exc(),
+              'last_checks': CHECKS[-5:], 'wall_seconds': time.perf_counter() - START})
+        raise

@@ -1,0 +1,23 @@
+# Local environments, credentials and generated runtime artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.env
+.env.*
+*.pem
+*.key
+config.arc.yaml
+outputs/
+local_data/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+*.partial

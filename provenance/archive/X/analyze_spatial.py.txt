@@ -1,0 +1,652 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Independent CPU-only verification and frozen analysis for spatial deletion.
+
+Imports no producer/model/network code. Real-data analysis requires completed
+outputs; --self-test uses synthetic arrays and reads no research scores.
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import csv
+import hashlib
+import io
+import json
+import math
+from pathlib import Path
+import sys
+import time
+import zipfile
+
+import numpy as np
+
+sys.dont_write_bytecode = True
+OUT = Path(__file__).resolve().parent
+UP = OUT.parent.parent / 'innovation_loop_20261003_session01' / 'bank_coverage_attempt01'
+REPO = Path('${PROJECT_ROOT}')
+OLD = REPO / 'artifacts/ram_ad_20260918/realiad_static_development'
+INPUTS = OLD / 'attempt02/results/plastic_nut/inputs.csv'
+LABELS = OLD.parent / 'realiad_metadata_admission/realiad_jsons.zip'
+METHODS = ['dino_odd_own', 'dino_balanced_own', 'balanced_delete_topleft', 'balanced_delete_interior_sham']
+ORIGINAL, TARGET, SHAM = METHODS[1:]
+REGIONS = ['top_left', 'bottom_right', 'outer_ring', 'interior', 'parity00', 'parity01', 'parity10', 'parity11']
+META = ['category', 'path', 'group_key', 'camera', 'research_role']
+ALLOWED_OUT = {
+    'plan.json', 'preflight.json', 'intervention_identities.json', 'run_spatial.py',
+    'code_receipt.json', 'prediction_freeze.json', 'spatial_statistics.csv',
+    'balanced_usage.csv', 'scalar_predictions.csv', 'supervisor.json', 'result.json',
+    'plastic_nut_image_receipt.json', 'execution_monitor.json', 'launch_record.json',
+    'transport_attempts.json', 'preflight.py', 'launch_monitored.ps1', 'independent_intervention_static.json',
+}
+ALLOWED_UP = {'prediction_freeze.json', 'scalar_predictions.csv', 'normal_calibration_coverage.csv',
+              'new_bank_source_identities.csv', 'plan.json', 'preflight.json'}
+READS, CHECKS = {}, []
+
+
+def check(name, value, detail=None):
+    CHECKS.append({'check': name, 'pass': bool(value), 'detail': detail})
+    if not value:
+        raise ValueError('Independent check failed: ' + name)
+
+
+def allowed_read(path):
+    p = Path(path).resolve()
+    return ((p.parent == OUT and p.name in ALLOWED_OUT)
+            or (p.parent == UP.resolve() and p.name in ALLOWED_UP)
+            or p in {INPUTS.resolve(), LABELS.resolve()})
+
+
+def data(path):
+    path = Path(path).resolve()
+    if not allowed_read(path):
+        raise ValueError('File outside independent verifier read allowlist')
+    value = path.read_bytes()
+    READS[str(path)] = {'sha256': hashlib.sha256(value).hexdigest(), 'bytes': len(value)}
+    return value
+
+
+def read_json(path):
+    return json.loads(data(path).decode('utf-8-sig'))
+
+
+def read_csv(path):
+    return list(csv.DictReader(io.StringIO(data(path).decode('utf-8-sig'))))
+
+
+def digest(path):
+    path = Path(path).resolve()
+    # Hash-only dependency guard: source/metadata under known research roots;
+    # checkpoint paths must match the two established local weight filenames.
+    roots = [REPO.resolve(), Path('${RESEARCH_WORKSPACE}').resolve()]
+    checkpoint = path == Path('${USER_HOME}/.cache/torch/hub/checkpoints/dinov2_vitb14_pretrain.pth').resolve()
+    permitted = checkpoint or (any(path.is_relative_to(r) for r in roots)
+                               and (path.suffix.lower() in {'.py', '.json', '.csv', '.npy', '.zip', '.ps1'}
+                                    or path.name == 'image_inputs.jsonl.gz'))
+    known_vendor_python = path.is_relative_to((REPO / 'artifacts/ram_ad_20260918/vendor/dinov2_source/dinov2').resolve()) and path.suffix == '.py'
+    if not permitted or (not known_vendor_python and any(x in path.name.lower() for x in ('token', 'credential', 'secret'))):
+        raise ValueError('Unapproved dependency hash path')
+    h = hashlib.sha256()
+    size = 0
+    with path.open('rb') as f:
+        for block in iter(lambda: f.read(8 * 1024 * 1024), b''):
+            h.update(block)
+            size += len(block)
+    READS[str(path)] = {'sha256': h.hexdigest(), 'bytes': size, 'hash_only': True}
+    return h.hexdigest()
+
+
+def save(name, value):
+    (OUT / name).write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def compact_checks():
+    families = collections.Counter()
+    rolling = hashlib.sha256()
+    for record in CHECKS:
+        family = record['check'].split('_plastic_nut/')[0]
+        families[family] += 1
+        rolling.update(json.dumps(record, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode('utf-8') + b'\n')
+    return {'checks_total': len(CHECKS), 'checks_failed': sum(not r['pass'] for r in CHECKS),
+            'check_family_counts': dict(sorted(families.items())),
+            'failed_checks': [r for r in CHECKS if not r['pass']],
+            'ordered_full_check_records_sha256': rolling.hexdigest(),
+            'persistence': 'All checks execute in memory; PASS records persist as counts and ordered-record digest to respect the 100 MiB budget.'}
+
+
+def persistence_receipt(limit):
+    path = OUT / 'analysis_persistence.json'
+    files = [p for p in OUT.rglob('*') if p.is_file() and p != path]
+    byte_count = sum(p.stat().st_size for p in files)
+    report = {'status': 'PASS', 'other_persisted_files': len(files), 'other_persisted_bytes': byte_count,
+              'limit_bytes': limit, 'including_this_receipt_bytes': byte_count}
+    for _ in range(10):
+        rendered = json.dumps(report, ensure_ascii=False, indent=2)
+        total = byte_count + len(rendered.encode('utf-8'))
+        if report['including_this_receipt_bytes'] == total:
+            break
+        report['including_this_receipt_bytes'] = total
+    if total > limit:
+        raise ValueError('Persisted byte limit exceeded after analysis outputs')
+    path.write_bytes(rendered.encode('utf-8'))
+    actual = sum(p.stat().st_size for p in OUT.rglob('*') if p.is_file())
+    if actual != total or actual > limit:
+        raise ValueError('Post-write persistence accounting mismatch')
+    return report
+
+
+def csvsave(name, rows):
+    with (OUT / name).open('w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0]))
+        w.writeheader()
+        w.writerows(rows)
+
+
+def boolean(value):
+    if value in (True, 1, '1', 'True', 'true'):
+        return True
+    if value in (False, 0, '0', 'False', 'false'):
+        return False
+    raise ValueError('Invalid boolean')
+
+
+def threshold(values):
+    values = np.asarray(values, float)
+    rank = (95 * (len(values) + 1) + 99) // 100
+    if rank > len(values):
+        raise ValueError('Threshold rank outside finite observed sample')
+    return float(np.sort(values)[rank - 1])
+
+
+def group_rows(rows):
+    groups = collections.defaultdict(list)
+    for r in rows:
+        groups[r['group_key']].append(r)
+    groups = {k: sorted(v, key=lambda r: int(r['camera'])) for k, v in sorted(groups.items())}
+    check('complete_five_camera_groups_' + str(len(rows)), all(
+        len(v) == 5 and [int(r['camera']) for r in v] == [1, 2, 3, 4, 5]
+        and len({r['research_role'] for r in v}) == 1 for v in groups.values()))
+    return groups
+
+
+def primary_arrays(full_target, full_sham, tl_target, tl_sham, in_target, in_sham):
+    arrays = [np.asarray(x, float) for x in (full_target, full_sham, tl_target, tl_sham, in_target, in_sham)]
+    if not all(a.shape == arrays[0].shape and np.isfinite(a).all() and (a > 0).all() for a in arrays):
+        raise ValueError('Undefined primary log endpoint: nonpositive/nonfinite or mismatched arrays')
+    a, b, c, d, e, f = arrays
+    full = np.log(a / b)
+    tl = np.log(c / d)
+    interior = np.log(e / f)
+    return {'full': full, 'top_left': tl, 'interior': interior, 'spatial_interaction': tl - interior}
+
+
+def boot_summary(group_values, draws):
+    group_values = np.asarray(group_values, float)
+    means = group_values[draws].mean(axis=1)
+    ci = np.quantile(means, [.025, .975])
+    value = float(group_values.mean())
+    return {'mean_log_contrast': value, 'conditional_percentile95': ci.tolist(),
+            'geometric_ratio_or_ratio_of_ratios': float(np.exp(value)),
+            'positive_lower_bound': bool(ci[0] > 0)}
+
+
+def region_has(region, row, col):
+    if region == 'top_left':
+        return row == 0 or col == 0
+    if region == 'bottom_right':
+        return row == 63 or col == 63
+    if region == 'outer_ring':
+        return row in (0, 63) or col in (0, 63)
+    if region == 'interior':
+        return 1 <= row <= 62 and 1 <= col <= 62
+    if region.startswith('parity'):
+        return (row % 2, col % 2) == (int(region[-2]), int(region[-1]))
+    raise ValueError('Unknown region')
+
+
+def verify_runtime(plan):
+    preflight = read_json(OUT / 'preflight.json')
+    sup = read_json(OUT / 'supervisor.json')
+    freeze = read_json(OUT / 'prediction_freeze.json')
+    check('successful_terminal_supervisor', sup['exit_code'] == 0 and not sup['timeout'])
+    check('frozen_methods', plan['methods'] == METHODS)
+    check('frozen_role_counts', plan['input_roles'] == {'source_fit': 875, 'source_calibration': 380, 'development': 755})
+    check('preflight_status_pass', str(preflight['status']).startswith('PASS'))
+    dependencies = preflight['dependency_hashes']
+    mismatches = [p for p, expected in dependencies.items() if digest(p) != expected]
+    check('dependency_hashes_unchanged', not mismatches, {'count': len(dependencies), 'mismatches': mismatches})
+    checkpoints = preflight.get('checkpoint_hashes', {})
+    check('one_dino_checkpoint_frozen', len(checkpoints) == 1)
+    check('checkpoint_hash_unchanged', all(digest(p) == h for p, h in checkpoints.items()))
+    code_receipt = read_json(OUT / 'code_receipt.json')
+    check('producer_code_receipt', digest(OUT / 'run_spatial.py') == code_receipt['sha256'])
+    check('no_confirmation_access', freeze['confirmation_access'] == 0)
+    check('gpu_budget', 0 < freeze['gpu_wall_seconds'] <= plan['resources']['gpu_wall_seconds'])
+    check('no_cell_subset_monotonic_violations', freeze['total_monotonic_violations'] == {TARGET: 0, SHAM: 0})
+    check('all_query_cells_checked', freeze['monotonic_cells_per_subset'] == 1135 * 4096)
+    check('method_query_counts', freeze['per_method_counts'] == {m: 1135 for m in METHODS} and freeze['query_rows'] == 1135)
+    check('zero_masks_and_freeze_before_secondary_labels', freeze['mask_requests'] == 0 and freeze['before_secondary_labels'] is True)
+    check('no_dense_or_pixel_payload_persistence', freeze['dense_maps_saved'] is False and freeze['payload_saved'] is False)
+    check('plan_receipts_match', digest(OUT / 'plan.json') == freeze['plan_sha256'] == preflight['plan_sha256'] == code_receipt['plan_sha256'])
+    check('producer_receipts_match', digest(OUT / 'run_spatial.py') == freeze['producer_sha256'] == preflight['producer_sha256'])
+    check('intervention_receipt_match', digest(OUT / 'intervention_identities.json') == freeze['intervention_sha256'])
+    check('frozen_output_inventory', set(freeze['sha256_files']) == {'spatial_statistics.csv', 'balanced_usage.csv', 'scalar_predictions.csv'})
+    for name, expected in freeze['sha256_files'].items():
+        check('frozen_output_' + name, hashlib.sha256(data(OUT / name)).hexdigest() == expected)
+    image_receipt = read_json(OUT / 'plastic_nut_image_receipt.json')
+    check('only_2010_allowed_members', image_receipt['members'] == 2010 and image_receipt['confirmed_members'] == 0)
+    check('no_pixel_payload_files_saved', image_receipt['payload_files_saved'] == 0)
+    check('successful_image_acquisition_within_budget', 0 < image_receipt['wall_seconds'] <= plan['resources']['image_acquisition_seconds'])
+    attempts = read_json(OUT / 'transport_attempts.json')
+    check('bounded_image_only_transport_attempts', 1 <= len(attempts) <= 3 and all(r['phase'] == 'image' for r in attempts)
+          and [r['attempt'] for r in attempts] == list(range(1, len(attempts) + 1))
+          and attempts[-1]['status'] == 'PASS'
+          and all(r['status'] == 'TRANSIENT_TRANSPORT_FAILURE' for r in attempts[:-1]))
+    monitor = read_json(OUT / 'execution_monitor.json')
+    check('external_monitor_finished', monitor['status'] == 'FINISHED' and monitor['stop_reason'] is None)
+    check('wall_budget', 0 < monitor['wall_seconds'] <= plan['resources']['supervisor_seconds'])
+    check('monitor_budget_matches_plan', monitor['limit_rss_bytes'] == plan['resources']['rss_bytes']
+          and monitor['limit_wall_seconds'] == plan['resources']['supervisor_seconds'])
+    processes = monitor['process_evidence']
+    check('at_least_supervisor_and_worker_observed', len(processes) >= 2 and monitor['monitor_samples'] > 0)
+    check('rss_budget', all(0 < p['sampled_peak_rss_bytes'] <= p['native_peak_rss_bytes'] <= plan['resources']['rss_bytes']
+                            and p['samples'] > 0 for p in processes.values()))
+    launch = read_json(OUT / 'launch_record.json')
+    check('launch_producer_hash', launch['producer_sha256'] == digest(OUT / 'run_spatial.py'))
+    check('launch_command_exact', len(launch['command']) == 3 and Path(launch['command'][0]).resolve() == Path(sys.executable).resolve()
+          and launch['command'][1] == '-B' and Path(launch['command'][2]).resolve() == (OUT / 'run_spatial.py').resolve())
+    # File persistence accounting reads sizes only, no new file contents.
+    nbytes = sum(p.stat().st_size for p in OUT.rglob('*') if p.is_file())
+    check('persisted_bytes_budget', nbytes <= plan['resources']['persisted_bytes_limit'], {'bytes': nbytes})
+    check('no_forbidden_persisted_payload_extensions', not any(p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.npy', '.npz', '.pt', '.pth', '.bin', '.pkl'} for p in OUT.rglob('*') if p.is_file()))
+    return preflight, freeze, {'monitor': monitor, 'launch': launch, 'receipt': image_receipt, 'persisted_bytes_before_analysis': nbytes}
+
+
+def verify_data(freeze):
+    inputs = read_csv(INPUTS)
+    check('original_input_roles', collections.Counter(r['research_role'] for r in inputs) == {'source_fit': 875, 'source_calibration': 380, 'development': 755})
+    input_index = {r['path']: r for r in inputs}
+    check('unique_input_identity', len(input_index) == 2010)
+    group_rows(inputs)
+    fit = {p: r for p, r in input_index.items() if r['research_role'] == 'source_fit'}
+    query = {p: r for p, r in input_index.items() if r['research_role'] != 'source_fit'}
+    scalar = read_csv(OUT / 'scalar_predictions.csv')
+    by_path = {r['path']: r for r in scalar}
+    check('query_identity_exact', len(scalar) == len(by_path) == 1135 and set(by_path) == set(query))
+    check('query_metadata_exact', all(all(r[k] == query[p][k] for k in META) for p, r in by_path.items()))
+    check('all_finite_positive_scalar_scores', all(math.isfinite(float(r[m])) and float(r[m]) > 0 for r in scalar for m in METHODS))
+    oldscalar = {r['path']: r for r in read_csv(UP / 'scalar_predictions.csv')}
+    oldfreeze = read_json(UP / 'prediction_freeze.json')
+    for m in METHODS[:2]:
+        check('control_1135_exact_' + m, all(float(r[m]) == float(oldscalar[p][m]) for p, r in by_path.items()))
+        check('control_bank_hash_' + m, freeze['bank_hashes'][m] == oldfreeze['bank_hashes'][m])
+        check('producer_reports_zero_control_error_' + m, freeze['reproduced_controls_max_error'][m] == 0)
+    identities = read_csv(UP / 'new_bank_source_identities.csv')
+    banks = {m: {int(r['prototype']): r for r in identities if r['method'] == m} for m in METHODS[:2]}
+    for m, bank in banks.items():
+        check('prototype_ids_exact_' + m, set(bank) == set(range(4096)))
+        check('prototype_sourcefit_' + m, all(r['path'] in fit for r in bank.values()))
+    base_bank = banks[ORIGINAL]
+    target = {i for i, r in base_bank.items() if int(r['row']) == 0 or int(r['col']) == 0}
+    need = collections.Counter((fit[base_bank[i]['path']]['camera'], int(base_bank[i]['row']) % 2, int(base_bank[i]['col']) % 2) for i in target)
+    eligible = collections.defaultdict(list)
+    for i, r in base_bank.items():
+        if 1 <= int(r['row']) <= 62 and 1 <= int(r['col']) <= 62:
+            eligible[(fit[r['path']]['camera'], int(r['row']) % 2, int(r['col']) % 2)].append(i)
+    sham = set()
+    for stratum, n in need.items():
+        pool = sorted(eligible[stratum], key=lambda i: hashlib.sha256(('spatial-sham-v1:' + str(i) + ':' + base_bank[i]['path']).encode()).hexdigest())
+        check('sham_stratum_feasible_' + str(stratum), len(pool) >= n)
+        sham.update(pool[:n])
+    intervention = read_json(OUT / 'intervention_identities.json')
+    check('frozen_target_exact_92', len(target) == 92 and set(intervention['target_ids']) == target)
+    check('frozen_sham_exact_92', len(sham) == 92 and set(intervention['sham_ids']) == sham and not target & sham)
+    independent = read_json(OUT / 'independent_intervention_static.json')
+    check('root_independent_deletion_ids', independent['status'] == 'PASS_SOURCE_METADATA_ONLY'
+          and set(independent['target_ids']) == target and set(independent['sham_ids']) == sham)
+    check('source_group_counts_63_vs_76', len({fit[base_bank[i]['path']]['group_key'] for i in target}) == independent['target_source_groups'] == 63
+          and len({fit[base_bank[i]['path']]['group_key'] for i in sham}) == independent['sham_source_groups'] == 76)
+    check('matched_camera_parity', collections.Counter((fit[base_bank[i]['path']]['camera'], int(base_bank[i]['row']) % 2, int(base_bank[i]['col']) % 2) for i in sham) == need)
+    statrows = read_csv(OUT / 'spatial_statistics.csv')
+    stat = {(r['method'], r['path']): r for r in statrows}
+    check('all_method_queries_unique', len(statrows) == len(stat) == 4540 and set(stat) == {(m, p) for m in METHODS for p in query})
+    maxima = ['max'] + [r + '_max' for r in REGIONS]
+    for m in METHODS:
+        bank = banks[m] if m in banks else base_bank
+        removed = target if m == TARGET else sham if m == SHAM else set()
+        for p in query:
+            r = stat[(m, p)]
+            check('stat_metadata_' + m + '_' + p, all(r[k] == query[p][k] for k in META))
+            check('stat_max_scalar_' + m + '_' + p, float(r['max']) == float(by_path[p][m]))
+            check('stat_finite_positive_' + m + '_' + p, all(math.isfinite(float(r[k])) and float(r[k]) > 0 for k in maxima + ['mean', 'p95']))
+            check('summary_order_' + m + '_' + p, float(r['mean']) <= float(r['max']) and float(r['p95']) <= float(r['max']))
+            check('region_union_' + m + '_' + p,
+                  max(float(r['outer_ring_max']), float(r['interior_max'])) == float(r['max'])
+                  and max(float(r[q + '_max']) for q in ('parity00', 'parity01', 'parity10', 'parity11')) == float(r['max'])
+                  and max(float(r['top_left_max']), float(r['bottom_right_max'])) == float(r['outer_ring_max']))
+            tie_n = int(r['image_max_tie_count'])
+            tie_parts = {q: int(r['image_max_ties_' + q]) for q in REGIONS}
+            check('image_tie_count_partitions_' + m + '_' + p,
+                  1 <= tie_n <= 4096 and all(0 <= v <= tie_n for v in tie_parts.values())
+                  and tie_parts['outer_ring'] + tie_parts['interior'] == tie_n
+                  and sum(tie_parts[q] for q in ('parity00', 'parity01', 'parity10', 'parity11')) == tie_n
+                  and 0 <= tie_parts['top_left'] + tie_parts['bottom_right'] - tie_parts['outer_ring'] <= 2)
+            for region in [''] + REGIONS:
+                prefix = region + '_' if region else ''
+                row, col = int(r[prefix + 'argmax_row']), int(r[prefix + 'argmax_col'])
+                pid = int(r[prefix + 'nearest_prototype'])
+                check('peak_identity_' + m + '_' + p + '_' + region,
+                      0 <= row < 64 and 0 <= col < 64 and (not region or region_has(region, row, col))
+                      and pid in bank and pid not in removed
+                      and r[prefix + 'nearest_source_path'] == bank[pid]['path']
+                      and int(r[prefix + 'nearest_source_row']) == int(bank[pid]['row'])
+                      and int(r[prefix + 'nearest_source_col']) == int(bank[pid]['col'])
+                      and int(r[prefix + 'nearest_source_camera']) == int(fit[bank[pid]['path']]['camera']))
+                capacity = 4004 if m in (TARGET, SHAM) else 4096
+                check('nearest_tie_count_' + m + '_' + p + '_' + region, 1 <= int(r[prefix + 'nearest_distance_tie_count']) <= capacity)
+                if region:
+                    size = 127 if region in ('top_left', 'bottom_right') else 252 if region == 'outer_ring' else 3844 if region == 'interior' else 1024
+                    region_ties = int(r[region + '_max_tie_count'])
+                    expected_image_ties = region_ties if float(r[region + '_max']) == float(r['max']) else 0
+                    check('region_tie_consistency_' + m + '_' + p + '_' + region, 1 <= region_ties <= size and tie_parts[region] == expected_image_ties)
+                else:
+                    check('representative_peak_within_ties_' + m + '_' + p,
+                          all(not region_has(q, row, col) or tie_parts[q] > 0 for q in REGIONS))
+            if m in (TARGET, SHAM):
+                original = stat[(ORIGINAL, p)]
+                check('saved_subset_monotonic_' + m + '_' + p, all(float(r[k]) >= float(original[k]) for k in maxima + ['mean', 'p95']))
+    usage_rows = read_csv(OUT / 'balanced_usage.csv')
+    usage = {r['path']: r for r in usage_rows}
+    check('usage_identity_exact', len(usage_rows) == len(usage) == 1135 and set(usage) == set(query))
+    for p, r in usage.items():
+        base = stat[(ORIGINAL, p)]
+        pid = int(base['nearest_prototype'])
+        for label, deleted, m in [('target', target, TARGET), ('sham', sham, SHAM)]:
+            n, changed = int(r[label + '_nn_cells']), int(r[label + '_changed_cells'])
+            check('usage_count_' + label + '_' + p, 0 <= changed <= n <= 4096)
+            check('usage_argmax_' + label + '_' + p, boolean(r['argmax_uses_' + label]) == (pid in deleted))
+            check('usage_monotonic_' + label + '_' + p, int(r[label + '_monotonic_violations']) == 0)
+            if changed == 0:
+                check('no_change_score_' + label + '_' + p, float(stat[(m, p)]['max']) == float(base['max']))
+    return inputs, scalar, stat, usage, fit, oldfreeze
+
+
+def official_labels(query_rows):
+    # Called only after successful terminal/freeze/control/integrity admission.
+    with zipfile.ZipFile(io.BytesIO(data(LABELS))) as z:
+        doc = json.loads(z.read('realiad_jsons/plastic_nut.json'))
+    wanted = {r['path'] for r in query_rows}
+    labels = {}
+    for split in ('train', 'test'):
+        for r in doc[split]:
+            path = doc['meta']['prefix'] + r['image_path']
+            if path in wanted:
+                labels[path] = not (r['anomaly_class'] == doc['meta']['normal_class'] or r['mask_path'] is None)
+    check('official_query_labels_complete', set(labels) == wanted)
+    check('normal_calibration_official', all(not labels[r['path']] for r in query_rows if r['research_role'] == 'source_calibration'))
+    check('258_development_abnormal_labels', sum(labels[r['path']] for r in query_rows if r['research_role'] == 'development') == 258)
+    return labels
+
+
+def primary_analysis(scalar, stat):
+    cal = group_rows([r for r in scalar if r['research_role'] == 'source_calibration'])
+    check('76_primary_groups', len(cal) == 76)
+    def array(method, field):
+        return np.array([[float(stat[(method, r['path'])][field]) for r in rr] for rr in cal.values()])
+    arrays = primary_arrays(array(TARGET, 'max'), array(SHAM, 'max'), array(TARGET, 'top_left_max'),
+                            array(SHAM, 'top_left_max'), array(TARGET, 'interior_max'), array(SHAM, 'interior_max'))
+    rng = np.random.Generator(np.random.PCG64(20261012))
+    draws = rng.integers(0, 76, size=(5000, 76))
+    summaries = {k: boot_summary(a.mean(axis=1), draws) for k, a in arrays.items()}
+    group_values = [{'group_key': k, **{name: float(a[i].mean()) for name, a in arrays.items()}} for i, k in enumerate(cal)]
+    cameras = []
+    for camera in range(1, 6):
+        for name, a in arrays.items():
+            cameras.append({'camera': camera, 'endpoint': name, **boot_summary(a[:, camera - 1], draws)})
+    gate = summaries['full']['positive_lower_bound'] and summaries['spatial_interaction']['positive_lower_bound']
+    return {'unit': '76 five-view source-normal groups', 'seed': 20261012, 'bootstrap_samples': 5000,
+            'endpoints': summaries, 'diagnostic_gate_pass': gate, 'innovation_proven': False,
+            'per_camera': cameras}, group_values
+
+
+def secondary_analysis(scalar, labels, oldfreeze):
+    cal = group_rows([r for r in scalar if r['research_role'] == 'source_calibration'])
+    dev = group_rows([r for r in scalar if r['research_role'] == 'development'])
+    y = np.array([[labels[r['path']] for r in rr] for rr in dev.values()])
+    normal, abnormal = y.sum(axis=1) == 0, y.sum(axis=1) > 0
+    check('secondary_group_counts', int(normal.sum()) == 44 and int(abnormal.sum()) == 107)
+    base_cal = np.array([[float(r[ORIGINAL]) for r in rr] for rr in cal.values()])
+    base_tau = {'image': threshold(base_cal.ravel()), 'group': threshold(base_cal.max(axis=1))}
+    check('old_balanced_image_threshold', base_tau['image'] == oldfreeze['image_thresholds'][ORIGINAL])
+    check('old_balanced_group_threshold', base_tau['group'] == oldfreeze['group_thresholds'][ORIGINAL])
+    summaries, predictions = [], []
+    for m in METHODS:
+        c = np.array([[float(r[m]) for r in rr] for rr in cal.values()])
+        s = np.array([[float(r[m]) for r in rr] for rr in dev.values()])
+        recal_tau = {'image': threshold(c.ravel()), 'group': threshold(c.max(axis=1))}
+        for mode, taus in [('fixed_original_balanced', base_tau), ('independently_recalibrated', recal_tau)]:
+            for unit, tau in taus.items():
+                alarm = s > tau
+                anyalarm, support = alarm.any(axis=1), (alarm & y).any(axis=1)
+                summaries.append({'method': m, 'calibration': mode, 'threshold_unit': unit, 'threshold': tau,
+                    'normal_groups': 44, 'abnormal_groups': 107,
+                    'normal_false_positive_groups': int(anyalarm[normal].sum()),
+                    'abnormal_any_detected_groups': int(anyalarm[abnormal].sum()),
+                    'abnormal_supported_groups': int(support[abnormal].sum()),
+                    'normal_group_fpr': float(anyalarm[normal].mean()),
+                    'abnormal_any_group_tpr': float(anyalarm[abnormal].mean()),
+                    'abnormal_supported_group_tpr': float(support[abnormal].mean())})
+                for i, key in enumerate(dev):
+                    predictions.append({'method': m, 'calibration': mode, 'threshold_unit': unit, 'threshold': tau,
+                                        'group_key': key, 'is_anomaly': bool(abnormal[i]),
+                                        'any_alarm': bool(anyalarm[i]), 'supported_alarm': bool(support[i])})
+    return summaries, predictions
+
+
+def migration_analysis(scalar, stat, usage, fit):
+    reports = []
+    for role in ('source_calibration', 'development'):
+        paths = [r['path'] for r in scalar if r['research_role'] == role]
+        for method in (METHODS[0], TARGET, SHAM):
+            for region in [''] + REGIONS:
+                pre = region + '_' if region else ''
+                count = collections.Counter()
+                for p in paths:
+                    a, b = stat[(ORIGINAL, p)], stat[(method, p)]
+                    ar, ac, br, bc = [int(r[k]) for r, k in [(a, pre + 'argmax_row'), (a, pre + 'argmax_col'), (b, pre + 'argmax_row'), (b, pre + 'argmax_col')]]
+                    asp, bsp = a[pre + 'nearest_source_path'], b[pre + 'nearest_source_path']
+                    count['representative_query_peak_changed'] += (ar, ac) != (br, bc)
+                    count['representative_query_boundary_to_interior'] += region_has('outer_ring', ar, ac) and region_has('interior', br, bc)
+                    count['representative_query_interior_to_boundary'] += region_has('interior', ar, ac) and region_has('outer_ring', br, bc)
+                    count['representative_source_image_changed'] += asp != bsp
+                    count['representative_source_group_changed'] += fit[asp]['group_key'] != fit[bsp]['group_key']
+                    count['representative_source_camera_changed'] += fit[asp]['camera'] != fit[bsp]['camera']
+                    count['representative_source_coordinate_changed'] += (asp, a[pre + 'nearest_source_row'], a[pre + 'nearest_source_col']) != (bsp, b[pre + 'nearest_source_row'], b[pre + 'nearest_source_col'])
+                    peak_tie_key = region + '_max_tie_count' if region else 'image_max_tie_count'
+                    unique_peaks = int(a[peak_tie_key]) == int(b[peak_tie_key]) == 1
+                    unique_sources_at_unique_peaks = unique_peaks and int(a[pre + 'nearest_distance_tie_count']) == int(b[pre + 'nearest_distance_tie_count']) == 1
+                    count['both_query_peaks_unique'] += unique_peaks
+                    count['unique_query_peak_changed'] += unique_peaks and (ar, ac) != (br, bc)
+                    count['both_query_peaks_and_nearest_sources_unique'] += unique_sources_at_unique_peaks
+                    count['unique_source_group_changed'] += unique_sources_at_unique_peaks and fit[asp]['group_key'] != fit[bsp]['group_key']
+                reports.append({'role': role, 'method': method, 'region': region or 'full', 'views': len(paths), **dict(count)})
+    usage_summary = []
+    for role in ('source_calibration', 'development'):
+        paths = [r['path'] for r in scalar if r['research_role'] == role]
+        for deletion in ('target', 'sham'):
+            usage_summary.append({'role': role, 'deletion': deletion, 'views': len(paths),
+                'query_cells': len(paths) * 4096,
+                'representative_nn_in_deletion_cells': sum(int(usage[p][deletion + '_nn_cells']) for p in paths),
+                'strictly_changed_cells': sum(int(usage[p][deletion + '_changed_cells']) for p in paths),
+                'original_representative_argmax_uses_deletion_views': sum(boolean(usage[p]['argmax_uses_' + deletion]) for p in paths)})
+    return reports, usage_summary
+
+
+def tie_analysis(scalar, stat):
+    records = []
+    for role in ('source_calibration', 'development'):
+        for method in METHODS:
+            for camera in ('all', '1', '2', '3', '4', '5'):
+                paths = [r['path'] for r in scalar if r['research_role'] == role and (camera == 'all' or r['camera'] == camera)]
+                count = collections.Counter()
+                for p in paths:
+                    r = stat[(method, p)]
+                    n = int(r['image_max_tie_count'])
+                    tl = int(r['image_max_ties_top_left'])
+                    inside = int(r['image_max_ties_interior'])
+                    border = int(r['image_max_ties_outer_ring'])
+                    other_border = border - tl
+                    count['unique_image_peak_views'] += n == 1
+                    count['multiple_image_peak_views'] += n > 1
+                    count['all_image_peaks_top_left_views'] += tl == n
+                    count['any_image_peak_top_left_views'] += tl > 0
+                    count['all_image_peaks_interior_views'] += inside == n
+                    count['any_image_peak_interior_views'] += inside > 0
+                    count['all_image_peaks_other_boundary_views'] += other_border == n
+                    count['any_image_peak_other_boundary_views'] += other_border > 0
+                    count['all_image_peaks_outer_ring_views'] += border == n
+                    count['mixed_border_interior_image_peaks_views'] += border > 0 and inside > 0
+                    count['mixed_topleft_interior_otherboundary_peaks_views'] += sum(v > 0 for v in (tl, inside, other_border)) > 1
+                    count['unique_nearest_source_at_representative_peak_views'] += int(r['nearest_distance_tie_count']) == 1
+                    count['unique_peak_and_nearest_source_views'] += n == 1 and int(r['nearest_distance_tie_count']) == 1
+                    for parity in ('parity00', 'parity01', 'parity10', 'parity11'):
+                        count['all_image_peaks_' + parity + '_views'] += int(r['image_max_ties_' + parity]) == n
+                        count['any_image_peak_' + parity + '_views'] += int(r['image_max_ties_' + parity]) > 0
+                assert sum(count[k] for k in ('all_image_peaks_top_left_views', 'all_image_peaks_interior_views',
+                           'all_image_peaks_other_boundary_views', 'mixed_topleft_interior_otherboundary_peaks_views')) == len(paths)
+                records.append({'role': role, 'method': method, 'camera': camera, 'views': len(paths), **dict(count)})
+    return records
+
+
+def write_report(result):
+    p = result['primary']
+    gate = '两项预设诊断门通过' if p['diagnostic_gate_pass'] else '两项预设联合诊断门未通过'
+    lines = ['# 固定库空间删除：独立验收与分析', '',
+             f"流程验收 PASS：{result['checks_total']} 项检查通过。{gate}。**未据此认定创新。**", '',
+             '## 范围与执行', '',
+             '- 仅 plastic_nut：875 fit、380 calibration、755 development；两套原4096原型库精确重建。',
+             '- balanced 删除 top/left 92槽，或删除 camera+parity 匹配的内部92槽；两者均保留4004槽。未重新coreset。',
+             '- 1135图×两个原始控制分数精确复现；每个删除条件核对4,648,960个query cell无距离下降。CPU另核对所有已保存区域摘要、代表极值和来源身份。',
+             '- 目标删除来源63组、sham来源76组；源图/源组、特征距离与使用率没有匹配。',
+             '- 数据、代码、plan、intervention、三份冻结CSV哈希与预算检查均通过。没有确认像素/分数与mask访问。',
+             f"- 分析命令：`{' '.join(result['command'])}`。CPU耗时 {result['wall_seconds']:.3f} 秒。", '',
+             '## 预设主分析', '',
+             '每个正常视图计算 log(max_delete_top_left / max_delete_sham)，先在五视图组内平均，再对76组平均。两项门均使用相同5000次采集组重采样，PCG64 seed20261012。空间交互直接按 top/left log contrast − interior log contrast 计算。', '',
+             '| 端点 | 平均log contrast | 条件95%区间 | exp(均值) |', '| --- | ---: | --- | ---: |']
+    for name, v in p['endpoints'].items():
+        ci = v['conditional_percentile95']
+        lines.append(f"| {name} | {v['mean_log_contrast']:.8f} | [{ci[0]:.8f}, {ci[1]:.8f}] | {v['geometric_ratio_or_ratio_of_ratios']:.6f} |")
+    lines += ['', '只有 full 与 spatial_interaction 两项区间下界均>0才通过冻结诊断门。所有端点和相机分层均保留，没有根据结果改边宽、删除量、阈值、seed或类别。', '',
+              '## 固定阈值与重校准阈值', '',
+              '报警使用严格 score>tau。fixed_original_balanced 沿用原 balanced 阈值；independently_recalibrated 用同一380正常视图重新计算各条件的阈值。image阈值为第362顺序统计量；group阈值为76组第74顺序统计量。正常组44、异常组107。supported仅指官方异常视图支撑，没有mask空间含义。', '',
+              '| 方法 | 校准条件 | 阈值单位 | tau | 正常误报/44 | any检出/107 | supported/107 |',
+              '| --- | --- | --- | ---: | ---: | ---: | ---: |']
+    for r in result['secondary']:
+        lines.append(f"| {r['method']} | {r['calibration']} | {r['threshold_unit']} | {r['threshold']:.6f} | {r['normal_false_positive_groups']} | {r['abnormal_any_detected_groups']} | {r['abnormal_supported_groups']} |")
+    lines += ['', '## 极值位置、近邻与迁移', '',
+              '位置统计使用全部image-max并列峰计数。迁移CSV分别提供first-index代表峰迁移和两条件峰均唯一的迁移；最近来源唯一性另行限制，不能将一个代表近邻当作唯一来源。', '',
+              '下表的top/left、interior、other boundary是互斥空间分区：other boundary=outer ring中去掉top/left的cell。top/left包含两个与bottom/right重合的角点；原保存的top_left与bottom_right本身有重叠，此处other boundary已去重。“全部峰均”可以含同一区域内多个并列峰；“跨分区并列”指并列峰同时落在至少两个互斥分区。三项全部峰计数+跨分区并列恰等于视图总数。', '',
+              '| 群体/方法 | 全部峰top/left | 全部峰interior | 全部峰other boundary | 跨分区并列 | 唯一峰 |',
+              '| --- | ---: | ---: | ---: | ---: | ---: |']
+    for r in result['tie_summary']:
+        if r['camera'] == 'all':
+            lines.append(f"| {r['role']}/{r['method']} | {r['all_image_peaks_top_left_views']}/{r['views']} | {r['all_image_peaks_interior_views']}/{r['views']} | {r['all_image_peaks_other_boundary_views']}/{r['views']} | {r['mixed_topleft_interior_otherboundary_peaks_views']}/{r['views']} | {r['unique_image_peak_views']}/{r['views']} |")
+    lines += ['', '### 正常校准逐camera绝对计数', '',
+              '| 方法 | camera | 全部峰top/left | 全部峰interior | 全部峰other boundary | 跨分区并列 | views |',
+              '| --- | ---: | ---: | ---: | ---: | ---: | ---: |']
+    for r in result['tie_summary']:
+        if r['role'] == 'source_calibration' and r['camera'] != 'all':
+            lines.append(f"| {r['method']} | {r['camera']} | {r['all_image_peaks_top_left_views']} | {r['all_image_peaks_interior_views']} | {r['all_image_peaks_other_boundary_views']} | {r['mixed_topleft_interior_otherboundary_peaks_views']} | {r['views']} |")
+    lines += ['', '完整相机分层、group-level主分析数值、16条件逐组报警、区域迁移和近邻使用量分别保存于 `analysis_result.json`、`analysis_primary_groups.csv`、`analysis_group_predictions.csv`、`analysis_migration.csv`、`analysis_usage_summary.csv`、`analysis_tie_summary.csv`。', '',
+              '## 解释边界', '',
+              '即使两项门通过，也仅说明指定balanced库内被删除源原型对正常极值有较强作用，且作用向top/left查询区域集中。它不能证明整个odd→balanced改动的因果中介关系，不能识别位置编码、边缘图像内容、背景或源组构成的贡献。', '',
+              '这是一类、一个已选择库、一个固定sham与重复使用development的探索性诊断。组bootstrap条件于这些选择；不含bank或sham选择不确定性，也不生成未观察正常尾部。三个旧库构造联合门失败保持原结论。边界相关现象本身不能满足新颖性标准。', '',
+              '## 验收材料', '',
+              '`analysis_checks.json`给出每类验收数量、失败项及全部有序检查记录的SHA256；PASS明细只保留于运行内存，避免长路径重复写出占用预算。`analysis_result.json`给出输入哈希、实际命令、运行收据与全部数值。CPU不能独立重建未持久保存的全距离图；每cell单调性依赖producer现场统计，已保存标量和区域最大值由CPU独立核对。`analysis_persistence.json`记录全部分析产物写入后的100MiB预算检查。', '']
+    (OUT / 'analysis_report.md').write_text('\n'.join(lines), encoding='utf-8')
+
+
+def self_test():
+    a = np.full((76, 5), 2.0)
+    b = np.ones((76, 5))
+    values = primary_arrays(a, b, a * 2, b, a, b)
+    draws = np.random.Generator(np.random.PCG64(20261012)).integers(0, 76, (5000, 76))
+    assert abs(boot_summary(values['full'].mean(1), draws)['mean_log_contrast'] - math.log(2)) < 1e-14
+    assert abs(boot_summary(values['spatial_interaction'].mean(1), draws)['mean_log_contrast'] - math.log(2)) < 1e-14
+    assert boot_summary(values['full'].mean(1), draws)['positive_lower_bound']
+    zero = primary_arrays(b, b, b, b, b, b)
+    assert not boot_summary(zero['full'].mean(1), draws)['positive_lower_bound']
+    failed = False
+    try:
+        primary_arrays(a * 0, b, a, b, a, b)
+    except ValueError:
+        failed = True
+    assert failed
+    assert threshold(range(1, 381)) == 362 and threshold(range(1, 77)) == 74
+    assert region_has('top_left', 0, 63) and region_has('bottom_right', 0, 63)
+    assert not region_has('interior', 0, 63) and region_has('interior', 1, 62)
+    assert region_has('parity01', 0, 63)
+    result = {'status': 'SYNTHETIC_SELF_TEST_PASS', 'research_data_read': False,
+              'checks': ['positive_log_effect', 'paired_interaction', 'strict_positive_gate', 'zero_endpoint_rejected',
+                         'finite_sample_threshold_ranks', 'overlapping_edges_and_interior', 'parity_membership']}
+    save('analysis_self_test.json', result)
+    print(json.dumps(result))
+
+
+def run():
+    start = time.perf_counter()
+    required = ['plan.json', 'preflight.json', 'intervention_identities.json', 'code_receipt.json', 'prediction_freeze.json',
+                'spatial_statistics.csv', 'balanced_usage.csv', 'scalar_predictions.csv', 'supervisor.json',
+                'plastic_nut_image_receipt.json', 'execution_monitor.json', 'launch_record.json']
+    missing = [n for n in required if not (OUT / n).exists()]
+    if missing:
+        print(json.dumps({'status': 'WAIT_COMPLETE_INPUTS', 'missing': missing}))
+        return 2
+    try:
+        plan = read_json(OUT / 'plan.json')
+        preflight, freeze, runtime = verify_runtime(plan)
+        inputs, scalar, stat, usage, fit, oldfreeze = verify_data(freeze)
+        labels = official_labels(scalar)
+        primary, primary_groups = primary_analysis(scalar, stat)
+        secondary, predictions = secondary_analysis(scalar, labels, oldfreeze)
+        migration, usage_summary = migration_analysis(scalar, stat, usage, fit)
+        tie_summary = tie_analysis(scalar, stat)
+        result = {'status': 'INDEPENDENT_SPATIAL_ANALYSIS_PASS', 'scientific_diagnostic_status': 'SUPPORTED' if primary['diagnostic_gate_pass'] else 'NOT_ESTABLISHED',
+            'innovation_proven': False, 'command': [sys.executable, '-B', str(Path(__file__).resolve())],
+            'checks_total': len(CHECKS), 'checks_failed': 0, 'primary': primary, 'secondary': secondary,
+            'migration': migration, 'usage_summary': usage_summary, 'tie_summary': tie_summary, 'runtime': runtime, 'inputs': READS,
+            'wall_seconds': time.perf_counter() - start,
+            'limits': ['conditional on fitted bank and single matched sham', 'necessity does not identify mediation of odd-to-balanced change',
+                       'source camera/parity matched, source image/group and feature distances not matched',
+                       'no mask data; representative peak/source migration is not unique-location evidence',
+                       'reused development; no confirmation or deployment-risk conclusion']}
+        save('analysis_checks.json', compact_checks())
+        save('analysis_result.json', result)
+        csvsave('analysis_primary_groups.csv', primary_groups)
+        csvsave('analysis_secondary.csv', secondary)
+        csvsave('analysis_group_predictions.csv', predictions)
+        csvsave('analysis_migration.csv', migration)
+        csvsave('analysis_usage_summary.csv', usage_summary)
+        csvsave('analysis_tie_summary.csv', tie_summary)
+        write_report(result)
+        persistence_receipt(plan['resources']['persisted_bytes_limit'])
+        print(json.dumps({'status': result['status'], 'checks_total': len(CHECKS), 'primary': primary, 'wall_seconds': result['wall_seconds']}, ensure_ascii=False, indent=2))
+        return 0
+    except Exception as exc:
+        save('analysis_checks_failed.json', compact_checks())
+        save('analysis_failure.json', {'status': 'INDEPENDENT_ADMISSION_OR_ANALYSIS_FAILED',
+              'error_type': type(exc).__name__, 'message': str(exc), 'checks_total': len(CHECKS),
+              'checks_failed': sum(not c['pass'] for c in CHECKS), 'inputs': READS,
+              'scientific_results_admitted': False})
+        raise
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--self-test', action='store_true')
+    args = parser.parse_args()
+    if args.self_test:
+        self_test()
+    else:
+        sys.exit(run())

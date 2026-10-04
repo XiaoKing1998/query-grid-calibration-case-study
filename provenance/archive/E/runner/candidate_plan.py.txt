@@ -1,0 +1,151 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Metadata-only transfer of a public capped candidate rule; no torch or pixels.
+
+This transfers the candidate rule to the frozen Real-IAD/DINO896 cohort. It is
+not an execution or reproduction of the public WRN/PatchCore implementation.
+"""
+from pathlib import Path
+import csv
+import hashlib
+import json
+import sys
+import time
+
+sys.dont_write_bytecode = True
+HERE = Path(__file__).resolve().parent
+OUT = HERE.parent
+OLD = Path('${PROJECT_ROOT}/artifacts/ram_ad_20260918/realiad_static_development')
+CONSTRUCTIONS = ('native', 'uniform', 'native_shuffle')
+SEEDS = (0, 1, 2)
+METHODS = tuple(f'{name}_s{seed}' for name in CONSTRUCTIONS for seed in SEEDS)
+COUNTS = {'source_fit': 875, 'source_calibration': 380, 'development': 755}
+BATCH_IMAGES = 8
+CELLS = 4096
+RESERVOIR = 50000
+CANDIDATES = 20000
+SHUFFLE_TAG = 'external-sampling-shuffle-v1:'
+
+
+def sha(path):
+    h = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for block in iter(lambda: stream.read(8 * 1024**2), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def write_json(path, value):
+    with Path(path).open('x', encoding='utf-8') as stream:
+        json.dump(value, stream, indent=2, ensure_ascii=False, allow_nan=False)
+
+
+def write_csv(path, records):
+    records = iter(records)
+    first = next(records)
+    with Path(path).open('x', encoding='utf-8', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(first))
+        writer.writeheader()
+        writer.writerow(first)
+        writer.writerows(records)
+
+
+def load_roles():
+    sys.path.insert(0, str(OLD))
+    import static_runner
+    roles = static_runner.load_manifest()['plastic_nut']
+    assert {role: len(value) for role, value in roles.items()} == COUNTS
+    assert len({row['path'] for value in roles.values() for row in value}) == 2010
+    for value in roles.values():
+        for row in value:
+            static_runner.assert_fetch_role(row)
+    return roles, static_runner
+
+
+def native_ids(np, order):
+    """Same batch boundaries, concatenation, two independent rng42 instances."""
+    rng = np.random.default_rng(42)
+    reservoir = None
+    trace = []
+    for batch_index, start in enumerate(range(0, len(order), BATCH_IMAGES)):
+        image_indices = np.asarray(order[start:start + BATCH_IMAGES], dtype=np.int64)
+        new = (image_indices[:, None] * CELLS + np.arange(CELLS)[None]).ravel()
+        if reservoir is None:
+            reservoir = new
+        else:
+            combined = np.concatenate([reservoir, new])
+            if len(combined) > RESERVOIR:
+                reservoir = combined[rng.choice(len(combined), size=RESERVOIR, replace=False)]
+            else:
+                reservoir = combined
+        trace.append({'batch_index': batch_index, 'new_images': len(image_indices),
+                      'total_images_seen': start + len(image_indices),
+                      'reservoir_size': len(reservoir),
+                      'ordered_reservoir_sha256_le_i8': hashlib.sha256(np.asarray(reservoir, dtype='<i8').tobytes()).hexdigest()})
+    assert len(reservoir) == RESERVOIR
+    final = reservoir[np.random.default_rng(42).choice(len(reservoir), size=CANDIDATES, replace=False)]
+    return final, reservoir, trace
+
+
+def construct(np, fit):
+    natural = np.arange(len(fit), dtype=np.int64)
+    shuffled = np.asarray(sorted(natural.tolist(), key=lambda i: (
+        hashlib.sha256((SHUFFLE_TAG + fit[i]['path']).encode('utf-8')).digest(), fit[i]['path'])), dtype=np.int64)
+    native, native_reservoir, native_trace = native_ids(np, natural)
+    reordered, reordered_reservoir, reordered_trace = native_ids(np, shuffled)
+    uniform = np.random.default_rng(42).choice(len(fit) * CELLS, size=CANDIDATES, replace=False)
+    pools = {'native': native, 'uniform': uniform, 'native_shuffle': reordered}
+    for values in pools.values():
+        assert len(values) == CANDIDATES and len(np.unique(values)) == CANDIDATES
+        assert int(values.min()) >= 0 and int(values.max()) < len(fit) * CELLS
+    return pools, {'native': natural, 'uniform': natural, 'native_shuffle': shuffled}, {
+        'native': native_trace, 'native_shuffle': reordered_trace}, {
+        'native': native_reservoir, 'native_shuffle': reordered_reservoir}
+
+
+def identity_records(np, fit, pools, orders):
+    for name in CONSTRUCTIONS:
+        ranks = np.empty(len(fit), dtype=np.int64)
+        ranks[orders[name]] = np.arange(len(fit))
+        for k, global_id in enumerate(pools[name]):
+            i, cell = divmod(int(global_id), CELLS)
+            row = fit[i]
+            yield {'construction': name, 'candidate_index': k, 'global_patch_id': int(global_id),
+                   'source_index': i, 'path': row['path'], 'group_key': row['group_key'],
+                   'camera': row['camera'], 'row': cell // 64, 'col': cell % 64,
+                   'stream_image_rank': int(ranks[i]), 'stream_batch_index': int(ranks[i]) // BATCH_IMAGES}
+
+
+def main():
+    assert sys.argv[1:] == ['--metadata-only']
+    started = time.perf_counter()
+    import numpy as np
+    roles, static = load_roles()
+    fit = roles['source_fit']
+    pools, orders, traces, reservoirs = construct(np, fit)
+    write_csv(HERE/'candidate_identities.csv', identity_records(np, fit, pools, orders))
+    write_csv(HERE/'source_orders.csv', ({'construction': name, 'stream_image_rank': rank,
+              'source_index': int(i), 'path': fit[int(i)]['path'], 'group_key': fit[int(i)]['group_key'],
+              'camera': fit[int(i)]['camera']} for name in CONSTRUCTIONS for rank, i in enumerate(orders[name])))
+    write_json(HERE/'candidate_trace.json', traces)
+    result = {'status': 'METADATA_CANDIDATE_IDENTITIES_COMPLETE_NO_PIXELS', 'input_roles': COUNTS,
+              'methods': METHODS, 'numpy_version': np.__version__, 'metadata_only': True,
+              'source_order_sha256': static.order_hash(fit), 'candidate_module_sha256': sha(__file__),
+              'source_history_patch_count': len(fit) * CELLS, 'candidate_count_each': CANDIDATES,
+              'batch_images': BATCH_IMAGES, 'reservoir_size': RESERVOIR, 'shuffle_tag': SHUFFLE_TAG,
+              'reservoir_rng': 'independent numpy.default_rng(42) per native construction',
+              'prepool_rng': 'fresh numpy.default_rng(42).choice(50000,20000,replace=False)',
+              'uniform_rng': 'independent numpy.default_rng(42).choice(875*4096,20000,replace=False)',
+              'ordered_candidate_sha256_le_i8': {name: hashlib.sha256(np.asarray(ids, dtype='<i8').tobytes()).hexdigest() for name, ids in pools.items()},
+              'ordered_reservoir_sha256_le_i8': {name: hashlib.sha256(np.asarray(ids, dtype='<i8').tobytes()).hexdigest() for name, ids in reservoirs.items()},
+              'represented_images': {name: int(len(np.unique(ids // CELLS))) for name, ids in pools.items()},
+              'sha256_files': {name: sha(HERE/name) for name in ('candidate_identities.csv', 'source_orders.csv', 'candidate_trace.json')},
+              'wall_seconds': time.perf_counter() - started,
+              'new_pixels': 0, 'gpu_used': False, 'credentials_read': False, 'confirmation_access': 0}
+    write_json(HERE/'candidate_metadata.json', result)
+    print(json.dumps(result), flush=True)
+
+
+if __name__ == '__main__':
+    main()

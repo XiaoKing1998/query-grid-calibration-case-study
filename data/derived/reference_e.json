@@ -1,0 +1,1901 @@
+{
+  "operating_points": [
+    {
+      "method": "native_s0",
+      "threshold": 1735.33203125,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 42,
+      "any": 43,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.3925233644859813,
+      "any_tpr": 0.40186915887850466,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "native_s1",
+      "threshold": 1735.823974609375,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 40,
+      "any": 41,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.37383177570093457,
+      "any_tpr": 0.38317757009345793,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "native_s2",
+      "threshold": 1628.76123046875,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 53,
+      "any": 59,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.4953271028037383,
+      "any_tpr": 0.5514018691588785,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "uniform_s0",
+      "threshold": 1721.01904296875,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 31,
+      "any": 36,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.2897196261682243,
+      "any_tpr": 0.3364485981308411,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "uniform_s1",
+      "threshold": 1716.92578125,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 31,
+      "any": 35,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.2897196261682243,
+      "any_tpr": 0.32710280373831774,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "uniform_s2",
+      "threshold": 1716.92578125,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 31,
+      "any": 35,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.2897196261682243,
+      "any_tpr": 0.32710280373831774,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "native_shuffle_s0",
+      "threshold": 1740.98681640625,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 39,
+      "any": 48,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.3644859813084112,
+      "any_tpr": 0.4485981308411215,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "native_shuffle_s1",
+      "threshold": 1722.834716796875,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 46,
+      "any": 56,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.42990654205607476,
+      "any_tpr": 0.5233644859813084,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    },
+    {
+      "method": "native_shuffle_s2",
+      "threshold": 1722.834716796875,
+      "fp": 0,
+      "normal_groups": 44,
+      "supported": 43,
+      "any": 53,
+      "abnormal_groups": 107,
+      "fpr": 0.0,
+      "supported_tpr": 0.40186915887850466,
+      "any_tpr": 0.4953271028037383,
+      "fpr_cp95_lower": 0.0,
+      "fpr_cp95_upper": 0.08041993976357587
+    }
+  ],
+  "method_uncertainty": [
+    {
+      "method": "native_s0",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_s0",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.3925233644859813,
+      "lower": 0.29906542056074764,
+      "upper": 0.48598130841121495
+    },
+    {
+      "method": "native_s0",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.40186915887850466,
+      "lower": 0.308411214953271,
+      "upper": 0.4953271028037383
+    },
+    {
+      "method": "native_s0",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.022727272727272728
+    },
+    {
+      "method": "native_s0",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.3925233644859813,
+      "lower": 0.2616822429906542,
+      "upper": 0.514018691588785
+    },
+    {
+      "method": "native_s0",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.40186915887850466,
+      "lower": 0.2616822429906542,
+      "upper": 0.5794392523364486
+    },
+    {
+      "method": "native_s0",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.022727272727272728
+    },
+    {
+      "method": "native_s0",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.3925233644859813,
+      "lower": 0.2336448598130841,
+      "upper": 0.5794392523364486
+    },
+    {
+      "method": "native_s0",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.40186915887850466,
+      "lower": 0.2336448598130841,
+      "upper": 0.6261682242990654
+    },
+    {
+      "method": "native_s1",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_s1",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.37383177570093457,
+      "lower": 0.2803738317757009,
+      "upper": 0.4672897196261682
+    },
+    {
+      "method": "native_s1",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.38317757009345793,
+      "lower": 0.2897196261682243,
+      "upper": 0.4766355140186916
+    },
+    {
+      "method": "native_s1",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.06818181818181818
+    },
+    {
+      "method": "native_s1",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.37383177570093457,
+      "lower": 0.2523364485981308,
+      "upper": 0.5327102803738317
+    },
+    {
+      "method": "native_s1",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.38317757009345793,
+      "lower": 0.2616822429906542,
+      "upper": 0.5794392523364486
+    },
+    {
+      "method": "native_s1",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.06818181818181818
+    },
+    {
+      "method": "native_s1",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.37383177570093457,
+      "lower": 0.19626168224299065,
+      "upper": 0.5794392523364486
+    },
+    {
+      "method": "native_s1",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.38317757009345793,
+      "lower": 0.205607476635514,
+      "upper": 0.6261682242990654
+    },
+    {
+      "method": "native_s2",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_s2",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.4953271028037383,
+      "lower": 0.40186915887850466,
+      "upper": 0.5981308411214953
+    },
+    {
+      "method": "native_s2",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.5514018691588785,
+      "lower": 0.45794392523364486,
+      "upper": 0.6448598130841121
+    },
+    {
+      "method": "native_s2",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.06818181818181818
+    },
+    {
+      "method": "native_s2",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.4953271028037383,
+      "lower": 0.27102803738317754,
+      "upper": 0.5794392523364486
+    },
+    {
+      "method": "native_s2",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.5514018691588785,
+      "lower": 0.2803738317757009,
+      "upper": 0.6542056074766355
+    },
+    {
+      "method": "native_s2",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.13636363636363635
+    },
+    {
+      "method": "native_s2",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.4953271028037383,
+      "lower": 0.2523364485981308,
+      "upper": 0.6074766355140186
+    },
+    {
+      "method": "native_s2",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.5514018691588785,
+      "lower": 0.2616822429906542,
+      "upper": 0.6635514018691588
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.205607476635514,
+      "upper": 0.38317757009345793
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.3364485981308411,
+      "lower": 0.2523364485981308,
+      "upper": 0.42990654205607476
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.19626168224299065,
+      "upper": 0.4205607476635514
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.3364485981308411,
+      "lower": 0.22429906542056074,
+      "upper": 0.5233644859813084
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.16822429906542055,
+      "upper": 0.48621495327102465
+    },
+    {
+      "method": "uniform_s0",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.3364485981308411,
+      "lower": 0.19626168224299065,
+      "upper": 0.5794392523364486
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.205607476635514,
+      "upper": 0.38317757009345793
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.32710280373831774,
+      "lower": 0.24299065420560748,
+      "upper": 0.4205607476635514
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.022727272727272728
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.22429906542056074,
+      "upper": 0.42990654205607476
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.32710280373831774,
+      "lower": 0.2523364485981308,
+      "upper": 0.5420560747663551
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.022727272727272728
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.18691588785046728,
+      "upper": 0.5233644859813084
+    },
+    {
+      "method": "uniform_s1",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.32710280373831774,
+      "lower": 0.22429906542056074,
+      "upper": 0.6261682242990654
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.205607476635514,
+      "upper": 0.38317757009345793
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.32710280373831774,
+      "lower": 0.24299065420560748,
+      "upper": 0.4205607476635514
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.22429906542056074,
+      "upper": 0.4205607476635514
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.32710280373831774,
+      "lower": 0.2523364485981308,
+      "upper": 0.514018691588785
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.2897196261682243,
+      "lower": 0.18691588785046728,
+      "upper": 0.4766355140186916
+    },
+    {
+      "method": "uniform_s2",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.32710280373831774,
+      "lower": 0.22429906542056074,
+      "upper": 0.5700934579439252
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.3644859813084112,
+      "lower": 0.2803738317757009,
+      "upper": 0.45794392523364486
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.4485981308411215,
+      "lower": 0.35514018691588783,
+      "upper": 0.5420560747663551
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.3644859813084112,
+      "lower": 0.18691588785046728,
+      "upper": 0.5327102803738317
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.4485981308411215,
+      "lower": 0.2523364485981308,
+      "upper": 0.6915887850467289
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.3644859813084112,
+      "lower": 0.16822429906542055,
+      "upper": 0.5794392523364486
+    },
+    {
+      "method": "native_shuffle_s0",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.4485981308411215,
+      "lower": 0.22429906542056074,
+      "upper": 0.7383177570093458
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.42990654205607476,
+      "lower": 0.3364485981308411,
+      "upper": 0.5233644859813084
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.5233644859813084,
+      "lower": 0.42990654205607476,
+      "upper": 0.616822429906542
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.022727272727272728
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.42990654205607476,
+      "lower": 0.16822429906542055,
+      "upper": 0.5514018691588785
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.5233644859813084,
+      "lower": 0.2523364485981308,
+      "upper": 0.719626168224299
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.045454545454545456
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.42990654205607476,
+      "lower": 0.14953271028037382,
+      "upper": 0.6074766355140186
+    },
+    {
+      "method": "native_shuffle_s1",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.5233644859813084,
+      "lower": 0.22429906542056074,
+      "upper": 0.7757009345794392
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.40186915887850466,
+      "lower": 0.308411214953271,
+      "upper": 0.4953271028037383
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.4953271028037383,
+      "lower": 0.40186915887850466,
+      "upper": 0.5887850467289719
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.40186915887850466,
+      "lower": 0.27102803738317754,
+      "upper": 0.5514018691588785
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.4953271028037383,
+      "lower": 0.3644859813084112,
+      "upper": 0.7757009345794392
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.40186915887850466,
+      "lower": 0.24299065420560748,
+      "upper": 0.5981308411214953
+    },
+    {
+      "method": "native_shuffle_s2",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.4953271028037383,
+      "lower": 0.32710280373831774,
+      "upper": 0.8130841121495327
+    }
+  ],
+  "contrasts": [
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.10280373831775702,
+      "lower": -0.17757009345794394,
+      "upper": -0.028037383177570097
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.06542056074766356,
+      "lower": -0.14953271028037385,
+      "upper": 0.01869158878504673
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.08411214953271029,
+      "lower": -0.15887850467289721,
+      "upper": -0.009345794392523366
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.05607476635514019,
+      "lower": -0.14018691588785048,
+      "upper": 0.028037383177570097
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.20560747663551404,
+      "lower": -0.2897196261682243,
+      "upper": -0.12149532710280375
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.22429906542056072,
+      "lower": -0.3177570093457944,
+      "upper": -0.13084112149532712
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.13084112149532712,
+      "lower": -0.20560747663551404,
+      "upper": -0.05919003115264796
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.11526479750778816,
+      "lower": -0.19626168224299065,
+      "upper": -0.03426791277258565
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.022727272727272728,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.10280373831775702,
+      "lower": -0.22429906542056072,
+      "upper": 0.08411214953271029
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.06542056074766356,
+      "lower": -0.24299065420560745,
+      "upper": 0.15887850467289721
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.04545454545454545,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.08411214953271029,
+      "lower": -0.24299065420560745,
+      "upper": 0.15887850467289721
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.05607476635514019,
+      "lower": -0.24299065420560745,
+      "upper": 0.24299065420560745
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.06818181818181818,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.20560747663551404,
+      "lower": -0.2897196261682242,
+      "upper": 0.07476635514018692
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.22429906542056072,
+      "lower": -0.3177570093457944,
+      "upper": 0.14018691588785048
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.04545454545454545,
+      "upper": 0.007575757575757576
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.13084112149532712,
+      "lower": -0.21806853582554517,
+      "upper": 0.07165109034267914
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.11526479750778816,
+      "lower": -0.22741433021806853,
+      "upper": 0.16822429906542058
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.022727272727272728,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.10280373831775702,
+      "lower": -0.25233644859813087,
+      "upper": 0.08411214953271029
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.06542056074766356,
+      "lower": -0.2523364485981308,
+      "upper": 0.16822429906542055
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.06818181818181818,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.08411214953271029,
+      "lower": -0.2710280373831775,
+      "upper": 0.15887850467289716
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.05607476635514019,
+      "lower": -0.2803738317757009,
+      "upper": 0.2523364485981308
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.13636363636363635,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.20560747663551404,
+      "lower": -0.3177570093457943,
+      "upper": 0.08411214953271026
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.22429906542056072,
+      "lower": -0.3457943925233644,
+      "upper": 0.14953271028037385
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.06060606060606061,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.13084112149532712,
+      "lower": -0.2523364485981308,
+      "upper": 0.08411214953271029
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.11526479750778816,
+      "lower": -0.2585669781931464,
+      "upper": 0.16510903426791274
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.028037383177570097,
+      "lower": -0.13084112149532712,
+      "upper": 0.07476635514018692
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.04672897196261683,
+      "lower": -0.06542056074766356,
+      "upper": 0.14953271028037385
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": 0.05607476635514019,
+      "lower": -0.04672897196261683,
+      "upper": 0.15887850467289721
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.14018691588785043,
+      "lower": 0.03738317757009341,
+      "upper": 0.2523364485981308
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.09345794392523366,
+      "lower": -0.20560747663551399,
+      "upper": 0.01869158878504673
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.05607476635514014,
+      "lower": -0.1775700934579439,
+      "upper": 0.0654205607476635
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.02180685358255452,
+      "lower": -0.11838006230529596,
+      "upper": 0.07476635514018692
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": 0.04361370716510904,
+      "lower": -0.05919003115264796,
+      "upper": 0.14330218068535824
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.022727272727272728,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.028037383177570097,
+      "lower": -0.15887850467289721,
+      "upper": 0.16822429906542058
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.04672897196261683,
+      "lower": -0.13084112149532706,
+      "upper": 0.2897196261682243
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.04545454545454545,
+      "upper": 0.022727272727272728
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": 0.05607476635514019,
+      "lower": -0.1495327102803738,
+      "upper": 0.27102803738317754
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.14018691588785043,
+      "lower": -0.11214953271028033,
+      "upper": 0.40186915887850466
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.06818181818181818,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.09345794392523366,
+      "lower": -0.24299065420560745,
+      "upper": 0.14018691588785048
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.05607476635514014,
+      "lower": -0.20560747663551399,
+      "upper": 0.26168224299065423
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.04545454545454545,
+      "upper": 0.007575757575757576
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.02180685358255452,
+      "lower": -0.16199376947040497,
+      "upper": 0.15919003115264344
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": 0.04361370716510904,
+      "lower": -0.1214953271028037,
+      "upper": 0.3302959501557621
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.022727272727272728,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.028037383177570097,
+      "lower": -0.20560747663551399,
+      "upper": 0.1775700934579439
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.04672897196261683,
+      "lower": -0.15887850467289716,
+      "upper": 0.308411214953271
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.06818181818181818,
+      "upper": 0.045454545454545456
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": 0.05607476635514019,
+      "lower": -0.1775700934579439,
+      "upper": 0.27102803738317754
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.14018691588785043,
+      "lower": -0.14018691588785043,
+      "upper": 0.4205607476635514
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.13636363636363635,
+      "upper": 0.0
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.09345794392523366,
+      "lower": -0.2803738317757009,
+      "upper": 0.17757009345794392
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.05607476635514014,
+      "lower": -0.24299065420560745,
+      "upper": 0.3177570093457944
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.06060606060606061,
+      "upper": 0.015151515151515152
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.02180685358255452,
+      "lower": -0.19626168224299065,
+      "upper": 0.19003115264797507
+    },
+    {
+      "candidate": "native_shuffle",
+      "reference": "native",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": 0.04361370716510904,
+      "lower": -0.15576323987538937,
+      "upper": 0.3302180685358255
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.07476635514018692,
+      "lower": -0.15887850467289721,
+      "upper": 0.009345794392523366
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.11214953271028039,
+      "lower": -0.20560747663551399,
+      "upper": -0.01869158878504673
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.14018691588785048,
+      "lower": -0.23364485981308408,
+      "upper": -0.05607476635514019
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.19626168224299062,
+      "lower": -0.2897196261682243,
+      "upper": -0.11214953271028033
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.11214953271028039,
+      "lower": -0.205607476635514,
+      "upper": -0.01869158878504673
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.16822429906542058,
+      "lower": -0.27102803738317754,
+      "upper": -0.07476635514018692
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "supported_tpr",
+      "point": -0.1090342679127726,
+      "lower": -0.19626168224299065,
+      "upper": -0.024922118380062308
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "fixed_calibration",
+      "metric": "any_tpr",
+      "point": -0.1588785046728972,
+      "lower": -0.249221183800623,
+      "upper": -0.07476635514018691
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.07476635514018692,
+      "lower": -0.20560747663551399,
+      "upper": 0.01869158878504673
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.11214953271028039,
+      "lower": -0.29906542056074764,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.022727272727272728,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.14018691588785048,
+      "lower": -0.18691588785046725,
+      "upper": 0.05607476635514019
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.19626168224299062,
+      "lower": -0.2897196261682243,
+      "upper": 0.009345794392523366
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.11214953271028039,
+      "lower": -0.15887850467289716,
+      "upper": -0.0467289719626168
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.16822429906542058,
+      "lower": -0.29906542056074764,
+      "upper": -0.07476635514018692
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.007575757575757576,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "supported_tpr",
+      "point": -0.1090342679127726,
+      "lower": -0.18068535825545165,
+      "upper": 0.0062305295950155866
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "calibration_only",
+      "metric": "any_tpr",
+      "point": -0.1588785046728972,
+      "lower": -0.29283489096573206,
+      "upper": -0.02492211838006229
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.07476635514018692,
+      "lower": -0.21495327102803735,
+      "upper": 0.05630841121494987
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 0,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.11214953271028039,
+      "lower": -0.29906542056074764,
+      "upper": 0.04672897196261683
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.045454545454545456,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.14018691588785048,
+      "lower": -0.23364485981308408,
+      "upper": 0.08411214953271029
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 1,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.19626168224299062,
+      "lower": -0.308411214953271,
+      "upper": 0.05607476635514019
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": 0.0,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.11214953271028039,
+      "lower": -0.21495327102803738,
+      "upper": 0.02803738317757007
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": 2,
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.16822429906542058,
+      "lower": -0.32710280373831774,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "fpr",
+      "point": 0.0,
+      "lower": -0.015151515151515152,
+      "upper": 0.0
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "supported_tpr",
+      "point": -0.1090342679127726,
+      "lower": -0.205607476635514,
+      "upper": 0.04361370716510904
+    },
+    {
+      "candidate": "uniform",
+      "reference": "native_shuffle",
+      "seed": "fixed_seed_mean",
+      "regime": "joint",
+      "metric": "any_tpr",
+      "point": -0.1588785046728972,
+      "lower": -0.30218068535825543,
+      "upper": 0.01869158878504673
+    }
+  ],
+  "normal_log_native_over_uniform": [
+    {
+      "seed": 0,
+      "point": 0.047607669214583724,
+      "lower": 0.03279350706929737,
+      "upper": 0.06152784982051943
+    },
+    {
+      "seed": 1,
+      "point": 0.06372999793752458,
+      "lower": 0.04880355412269018,
+      "upper": 0.07798195831563247
+    },
+    {
+      "seed": 2,
+      "point": 0.05776657324093469,
+      "lower": 0.04183790454753451,
+      "upper": 0.07335332919346443
+    }
+  ],
+  "gate": {
+    "per_seed_delta_supported_tpr": [
+      -0.10280373831775702,
+      -0.08411214953271029,
+      -0.20560747663551404
+    ],
+    "all_seeds_gain_ge_10pp": false,
+    "mean_joint_ci_lower_positive": false,
+    "primary_pass": false,
+    "separate_fp_point_screen": true,
+    "risk_noninferiority_established": false,
+    "independent_confirmation": false,
+    "main_contribution_established": false
+  },
+  "bootstrap_draw_sha256": {
+    "calibration": "6fbc83aa3ba76937d04f2f9ede680b2924b3133600bae73263356f9da8276576",
+    "normal": "4e39a54913036faef9300f2b5b22ce31b4ea73f4b07d1b41e2d14d38e074b6ad",
+    "abnormal": "9168f155429a911b4be430fb358f8c4b383ff870e0d1881465bf94325766dc09"
+  }
+}

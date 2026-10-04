@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "query-grid-calibration-case-study"
+version = "0.1.0"
+description = "Reproduction code for a candidate sampling, query grid, and normal calibration case study"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.0", "scipy>=1.13", "matplotlib>=3.8", "Pillow>=10"]
+
+[project.optional-dependencies]
+inference = ["torch>=2.2"]
+
+[project.scripts]
+querygrid = "querygrid.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.data-files]
+"share/querygrid/licenses" = ["LICENSE_STATUS.md", "THIRD_PARTY_NOTICES.md", "provenance/licenses/patchcore-LICENSE.txt", "provenance/licenses/patchcore-NOTICE.txt"]

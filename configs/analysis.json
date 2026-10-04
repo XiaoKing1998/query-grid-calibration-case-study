@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "bootstrap_replicates": 5000,
+  "p1_seed": 20261031,
+  "e_seed": 20261104,
+  "y_seed": 20261013,
+  "quantile_method": "linear",
+  "calibration_quantile": 0.95,
+  "strict_alarm": true,
+  "expected_role_views": {
+    "source_fit": 875,
+    "source_calibration": 380,
+    "development": 755
+  },
+  "expected_group_strata": [
+    76,
+    44,
+    107
+  ],
+  "numeric_atol": 1e-12,
+  "claim_scope": "Conditional descriptive analysis of fixed fit data, candidate pools, banks and reused development groups; no independent confirmation."
+}

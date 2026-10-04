@@ -1,0 +1,163 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Frozen full-query operational analysis; no inference or new data acquisition."""
+from pathlib import Path
+from collections import defaultdict
+import csv
+import hashlib
+import json
+import math
+import sys
+import time
+import zipfile
+import numpy as np
+from scipy.stats import beta
+
+sys.dont_write_bytecode = True
+OUT = Path(__file__).resolve().parent
+DATA = OUT/'runner'
+ROOT = Path('${PROJECT_ROOT}')
+METADATA = ROOT/'artifacts/ram_ad_20260918/realiad_metadata_admission/realiad_jsons.zip'
+METHODS = [f'{p}_s{s}' for p in ('native','uniform','native_shuffle') for s in range(3)]
+PAIRS = [('uniform','native'),('native_shuffle','native'),('uniform','native_shuffle')]
+METRICS = ['fpr','supported_tpr','any_tpr']
+
+def read(p): return json.loads(Path(p).read_text(encoding='utf-8-sig'))
+def csvread(p):
+    with Path(p).open(encoding='utf8', newline='') as f: return list(csv.DictReader(f))
+def sha(p):
+    h=hashlib.sha256()
+    with Path(p).open('rb') as f:
+        for b in iter(lambda:f.read(8*1024**2),b''): h.update(b)
+    return h.hexdigest()
+def save(name, x):
+    with (OUT/name).open('x',encoding='utf8') as f: json.dump(x,f,indent=2,ensure_ascii=False,allow_nan=False)
+def csvsave(name, rows):
+    with (OUT/name).open('x',encoding='utf8',newline='') as f:
+        w=csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
+def ci(a): return [float(x) for x in np.quantile(a,[.025,.975])]
+def dist(a, point):
+    lower,upper=ci(a)
+    return {'point':float(point),'lower':lower,'upper':upper}
+
+def operations(cal, normal, supported, anybad, reps, seed):
+    rank=math.ceil(.95*(len(cal)+1))-1
+    assert rank<len(cal)
+    tau=np.sort(cal,axis=0)[rank]
+    arrays=[normal,supported,anybad]
+    alarm=[a>tau for a in arrays]
+    point=np.stack([a.mean(axis=0) for a in alarm],axis=1)
+    rng=np.random.Generator(np.random.PCG64(seed))
+    draws=[rng.integers(0,len(a),size=(reps,len(a)),dtype=np.int64) for a in (cal,normal,supported)]
+    td=np.sort(cal[draws[0]],axis=1)[:,rank,:]
+    boot={k:[] for k in ('fixed_calibration','calibration_only','joint')}
+    for a,d in zip(arrays,(draws[1],draws[2],draws[2])):
+        boot['fixed_calibration'].append((a[d]>tau).mean(axis=1))
+        boot['calibration_only'].append((a[None,:,:]>td[:,None,:]).mean(axis=1))
+        boot['joint'].append((a[d]>td[:,None,:]).mean(axis=1))
+    return tau,alarm,point,{k:np.stack(v,axis=2) for k,v in boot.items()},draws,td
+
+def main():
+    started=time.perf_counter()
+    plan=read(OUT/'plan.json'); freeze=read(DATA/'prediction_freeze.json')
+    supervisor=read(DATA/'supervisor.json')
+    assert supervisor['exit_code']==0 and not supervisor['timeout']
+    assert plan['methods']==METHODS and freeze['plan_sha256']==sha(OUT/'plan.json')
+    assert freeze['confirmation_access']==0 and freeze['masks_requested']==0
+    for name,h in freeze['sha256_files'].items(): assert sha(DATA/name)==h
+    rows=csvread(DATA/'scalar_predictions.csv')
+    identities=csvread(OUT/'query_identities.csv')
+    assert [{k:r[k] for k in identities[0]} for r in rows]==identities
+    assert len(rows)==1135 and len({r['path'] for r in rows})==1135
+    roles={r['path']:r for r in rows}
+    assert sum(r['research_role']=='source_calibration' for r in rows)==380
+    assert sum(r['research_role']=='development' for r in rows)==755
+    # Metadata file contains identities for all roles; only allowlisted rows join.
+    with zipfile.ZipFile(METADATA) as z: official=json.loads(z.read('realiad_jsons/plastic_nut.json'))
+    labels={}
+    for split in ('train','test'):
+        for item in official[split]:
+            p=official['meta']['prefix'].rstrip('/')+'/'+item['image_path'].lstrip('/')
+            if p not in roles: continue
+            assert p not in labels
+            assert split==('train' if roles[p]['research_role']=='source_calibration' else 'test')
+            labels[p]=int(item['anomaly_class']!='OK')
+    del official
+    assert set(labels)==set(roles) and sum(labels.values())==258
+    groups=defaultdict(list)
+    for r in rows:
+        assert all(np.isfinite(float(r[m])) and float(r[m])>=0 for m in METHODS)
+        groups[r['group_key']].append(r)
+    assert all(len(g)==5 and len({r['camera'] for r in g})==5 and len({r['research_role'] for r in g})==1 for g in groups.values())
+    ck=sorted(g for g,v in groups.items() if v[0]['research_role']=='source_calibration')
+    nk=sorted(g for g,v in groups.items() if v[0]['research_role']=='development' and not any(labels[r['path']] for r in v))
+    bk=sorted(g for g,v in groups.items() if v[0]['research_role']=='development' and any(labels[r['path']] for r in v))
+    assert tuple(map(len,(ck,nk,bk)))==(76,44,107)
+    def maxscores(keys,supported=False):
+        return np.array([[max(float(r[m]) for r in groups[g] if not supported or labels[r['path']]) for m in METHODS] for g in keys])
+    cal,normal,bad,anybad=maxscores(ck),maxscores(nk),maxscores(bk,True),maxscores(bk)
+    tau,alarms,point,boot,draws,td=operations(cal,normal,bad,anybad,5000,20261104)
+    ops=[]; method_uncertainty=[]
+    for j,m in enumerate(METHODS):
+        fp,tp,atp=[int(a[:,j].sum()) for a in alarms]
+        lo=0. if fp==0 else float(beta.ppf(.025,fp,45-fp))
+        hi=1. if fp==44 else float(beta.ppf(.975,fp+1,44-fp))
+        ops.append({'method':m,'threshold':float(tau[j]),'fp':fp,'normal_groups':44,'supported':tp,'any':atp,'abnormal_groups':107,'fpr':fp/44,'supported_tpr':tp/107,'any_tpr':atp/107,'fpr_cp95_lower':lo,'fpr_cp95_upper':hi})
+        for regime,a in boot.items():
+            for k,metric in enumerate(METRICS): method_uncertainty.append({'method':m,'regime':regime,'metric':metric,**dist(a[:,j,k],point[j,k])})
+    contrasts=[]
+    for candidate,reference in PAIRS:
+        ii=[METHODS.index(f'{candidate}_s{s}') for s in range(3)]
+        jj=[METHODS.index(f'{reference}_s{s}') for s in range(3)]
+        dp=point[ii]-point[jj]
+        for regime,a in boot.items():
+            dd=a[:,ii,:]-a[:,jj,:]
+            for seed in (0,1,2,'fixed_seed_mean'):
+                bp=dd.mean(axis=1) if seed=='fixed_seed_mean' else dd[:,seed,:]
+                pp=dp.mean(axis=0) if seed=='fixed_seed_mean' else dp[seed]
+                for k,metric in enumerate(METRICS): contrasts.append({'candidate':candidate,'reference':reference,'seed':seed,'regime':regime,'metric':metric,**dist(bp[:,k],pp[k])})
+    threshold_cross=[]
+    for seed in range(3):
+        for p in ('native','uniform','native_shuffle'):
+            j=METHODS.index(f'{p}_s{seed}')
+            for q in ('native','uniform','native_shuffle'):
+                k=METHODS.index(f'{q}_s{seed}')
+                threshold_cross.append({'seed':seed,'score_method':METHODS[j],'threshold_method':METHODS[k],'threshold':float(tau[k]),'fp':int((normal[:,j]>tau[k]).sum()),'normal_groups':44,'supported':int((bad[:,j]>tau[k]).sum()),'any':int((anybad[:,j]>tau[k]).sum()),'abnormal_groups':107})
+    normal_log=[]
+    for seed in range(3):
+        v=np.array([np.mean([math.log(float(r[f'native_s{seed}'])/float(r[f'uniform_s{seed}'])) for r in groups[g]]) for g in ck])
+        normal_log.append({'seed':seed,**dist(v[draws[0]].mean(axis=1),v.mean())})
+    primary=next(r for r in contrasts if r['candidate']=='uniform' and r['reference']=='native' and r['seed']=='fixed_seed_mean' and r['regime']=='joint' and r['metric']=='supported_tpr')
+    gains=[float(point[3+s,1]-point[s,1]) for s in range(3)]
+    fp_screen=all(ops[3+s]['fp']<=ops[s]['fp']+1 for s in range(3))
+    gate={'per_seed_delta_supported_tpr':gains,'all_seeds_gain_ge_10pp':all(g>=.10 for g in gains),'mean_joint_ci_lower_positive':primary['lower']>0,'primary_pass':all(g>=.10 for g in gains) and primary['lower']>0,'separate_fp_point_screen':fp_screen,'risk_noninferiority_established':False,'independent_confirmation':False,'main_contribution_established':False}
+    csvsave('operating_points.csv',ops);csvsave('threshold_cross.csv',threshold_cross);csvsave('paired_contrasts.csv',contrasts)
+    group_rows=[{'population':pop,'group_key':g,**{m:float(a[i,j]) for j,m in enumerate(METHODS)}} for pop,keys,a in (('calibration',ck,cal),('normal_development',nk,normal),('supported_development',bk,bad),('any_development',bk,anybad)) for i,g in enumerate(keys)]
+    csvsave('group_scores.csv',group_rows)
+    normal_rows=csvread(DATA/'normal_statistics.csv')
+    normal_summary=[]
+    for m in METHODS:
+        for camera in ('1','2','3','4','5'):
+            rr=[r for r in normal_rows if r['method']==m and r['camera']==camera]
+            assert len(rr)==76
+            normal_summary.append({'method':m,'camera':camera,'n_images':76,**{field:float(np.mean([float(r[field]) for r in rr])) for field in ('mean_squared_nearest','p95_squared_nearest','max_squared_nearest')}})
+    csvsave('normal_camera_summary.csv',normal_summary)
+    result={'status':'ANALYSIS_COMPLETE_AWAITING_INDEPENDENT_VERIFICATION','methods':METHODS,'operating_points':ops,'method_uncertainty':method_uncertainty,'contrasts':contrasts,'normal_log_native_over_uniform':normal_log,'primary_contrast':primary,'gate':gate,'threshold_cross_rows':27,'bootstrap_draw_sha256':{n:hashlib.sha256(a.tobytes()).hexdigest() for n,a in zip(('calibration','normal','abnormal'),draws)},'plan_sha256':sha(OUT/'plan.json'),'prediction_freeze_sha256':sha(DATA/'prediction_freeze.json'),'analyzer_sha256':sha(__file__),'wall_seconds':time.perf_counter()-started,'command':[sys.executable,'-B',str(Path(__file__))],'confirmation_access':0,'new_pixels':0,'gpu':0}
+    save('analysis_result.json',result)
+    print(json.dumps({'primary_contrast':primary,'gate':gate,'operating_points':ops,'wall_seconds':result['wall_seconds']}))
+
+def selftest():
+    start=time.perf_counter()
+    cal=np.arange(1,77,dtype=float)[:,None]*np.array([[1.,2.]])
+    normal=np.array([[74.,148.],[75.,150.],[20.,40.]])
+    bad=np.array([[73.,146.],[100.,200.]])
+    t,a,p,b,d,td=operations(cal,normal,bad,bad,100,7)
+    assert t.tolist()==[74.,148.]
+    assert a[0].sum(axis=0).tolist()==[1,1]
+    assert np.array_equal(p[0],p[1]) and all(np.array_equal(x[:,0,:],x[:,1,:]) for x in b.values())
+    save('analysis_selftest.json',{'status':'PASS','checks':['rank74','strict_ties','own_calibration_scale_invariance','paired_bootstrap_scale_invariance'],'wall_seconds':time.perf_counter()-start,'research_inputs_read':0,'gpu':0})
+    print('ANALYSIS_SYNTHETIC_PASS')
+
+if __name__=='__main__':
+    selftest() if sys.argv[1:]==['--selftest'] else main()

@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "scope": "Local-output interface smoke test with copied released historical summaries and test-generated receipt; no new inference or experimental outcome.",
+  "checks": [
+    "p1_interface_accepts_valid_receipt",
+    "p1_refuses_output_overwrite",
+    "e_interface_accepts_valid_receipt",
+    "e_refuses_output_overwrite"
+  ],
+  "wall_seconds": 1.4984928999911062,
+  "new_pixels": 0,
+  "gpu_seconds": 0,
+  "confirmation_access": 0
+}

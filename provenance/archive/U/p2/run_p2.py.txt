@@ -1,0 +1,640 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""DRAFT: one source-image-matched P2 replacement; no execution on import.
+
+Required frozen plan fields: status=FROZEN_BEFORE_P2_FIT_PIXELS,
+methods=[base,target,sham], input_roles, replacement_count=240,
+phase_quota_per_camera=16, pair_tolerances={replace:.1,residual:.1,direct:.5},
+fit_coverage_tolerances={mean:.005,p95:.01,p99:.01}, resources.
+Preflight must pin this/P1 producer and dependencies, assert p1_gate_pass and
+resource_projection_pass. The root agent owns admission and external watchdog.
+"""
+from pathlib import Path
+from collections import defaultdict
+import csv
+import gc
+import hashlib
+import importlib.util
+import io
+import json
+import math
+import os
+import subprocess
+import sys
+import time
+import traceback
+import uuid
+
+sys.dont_write_bytecode = True
+OUT = Path(__file__).resolve().parent
+P1 = OUT.parent/'p1'
+SPEC = importlib.util.spec_from_file_location('p2_pinned_p1_helpers', P1/'runner_draft.py')
+p = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(p)
+METHODS = ('base', 'target', 'sham')
+PHASES = ('00', '01', '10')
+K = 240
+QUOTA = 16
+SENTINEL = 1000.
+
+
+def save(name, value):
+    with (OUT/name).open('x', encoding='utf8') as stream:
+        json.dump(value, stream, indent=2, allow_nan=False)
+
+
+def csvsave(name, records):
+    if not records:
+        return
+    with (OUT/name).open('x', encoding='utf8', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(records[0]))
+        writer.writeheader()
+        writer.writerows(records)
+
+
+def check_admission():
+    preflight = p.read(OUT/'preflight.json')
+    assert preflight['status'] == 'PASS_METADATA_AND_LOCAL_DEPENDENCY_ADMISSION'
+    assert preflight['p1_gate_pass'] is True and preflight['resource_projection_pass'] is True
+    assert p.sha(__file__) == preflight['producer_sha256']
+    for filename, expected in {**preflight['dependency_hashes'], **preflight['checkpoint_hashes']}.items():
+        assert p.sha(filename) == expected
+    plan = p.read(OUT/'plan.json')
+    assert p.sha(OUT/'plan.json') == preflight['plan_sha256']
+    assert plan['status'] == 'FROZEN_BEFORE_P2_FIT_PIXELS'
+    assert plan['methods'] == list(METHODS) and plan['input_roles'] == p.COUNTS
+    assert plan['replacement_count'] == K and plan['phase_quota_per_camera'] == QUOTA
+    assert plan['pair_tolerances'] == {'replace': .1, 'residual': .1, 'direct': .5}
+    assert plan['fit_coverage_tolerances'] == {'mean': .005, 'p95': .01, 'p99': .01}
+    assert plan['confirmation_pixels_and_scores'] == plan['masks_requested'] == 0
+    assert plan['resources']['gpu_wall_seconds'] == 1800
+    assert plan['resources']['supervisor_seconds'] == 5400
+    assert plan['resources']['rss_bytes'] == 40*1024**3
+    frozen = p.read(P1/'prediction_freeze.json')
+    assert frozen['status'] == 'P1_PREDICTIONS_FROZEN'
+    monitors = [p.read(P1/name) for name in ('probe_execution_monitor.json', 'inference_execution_monitor.json')]
+    assert all(value['status'] == 'FINISHED' and value['stop_reason'] is None for value in monitors)
+    prior = {'gpu_wall_seconds': frozen['total_p1_gpu_wall_seconds'],
+             'wall_seconds': sum(value['wall_seconds'] for value in monitors)}
+    assert prior['gpu_wall_seconds'] < 1800 and prior['wall_seconds'] < 5400
+    return plan, preflight, prior
+
+
+def fit_probe_cells(np, path, odd_cells):
+    coarse = (odd_cells//64//2)*32+(odd_cells%64//2)
+    excluded = set()
+    for cell in coarse:
+        row, col = divmod(int(cell), 32)
+        excluded.update((2*row+a)*64+2*col+b for a in (0, 1) for b in (0, 1))
+    seed = int.from_bytes(hashlib.sha256(('p2-fit-probe-v1:'+path).encode()).digest()[:8], 'little')
+    rng = np.random.default_rng(seed)
+    chosen = []
+    for a in (0, 1):
+        for b in (0, 1):
+            legal = [cell for cell in range(4096) if cell not in excluded and (cell//64)%2 == a and cell%2 == b]
+            assert len(legal) == 768
+            chosen.extend(rng.choice(legal, 16, replace=False).tolist())
+    assert len(set(chosen)) == 64 and not set(chosen)&excluded
+    return np.asarray(chosen, dtype=np.int64)
+
+
+def top_two(torch, np, query, bank, guard):
+    """Exact FP32 cached nearest+runner-up supports deleting any one anchor."""
+    norm = (bank*bank).sum(1)
+    values, indices, seconds = [], [], []
+    with torch.no_grad():
+        for q in torch.from_numpy(np.ascontiguousarray(query)).cuda().split(256):
+            guard()
+            distances = (q*q).sum(1, keepdim=True)+norm[None]-2*(q@bank.T)
+            distances.clamp_min_(0)
+            first, index = distances.min(1)
+            distances[torch.arange(len(q), device=q.device), index] = float('inf')
+            second = distances.min(1).values
+            values.append(first.cpu().numpy())
+            indices.append(index.cpu().numpy())
+            seconds.append(second.cpu().numpy())
+    return np.concatenate(values), np.concatenate(indices), np.concatenate(seconds)
+
+
+def source_key(path):
+    return hashlib.sha256(('p2-source-order-v1:'+path).encode()).hexdigest(), path
+
+
+def finite_scalar(value):
+    return float(value) if math.isfinite(float(value)) else None
+
+
+def match_pairs(np, torch, pool, bank_array, bank_tensor, bank_meta, guard):
+    """Single exact quota assignment; all filtering uses source-fit features only."""
+    from scipy.optimize import linear_sum_assignment
+    import scipy
+    started = time.perf_counter()
+    gate_counts = defaultdict(int)
+    best_anchor_rows = []
+    best_legal_anchor_rows = []
+    best_finite_anchor_rows = []
+    best_source = {}
+    minimum_direct = None
+    for image in pool:
+        guard()
+        metadata = image['row']
+        values, nearest, seconds = top_two(torch, np, image['features'], bank_tensor, guard)
+        features = image['features'].astype(np.float64)
+        norms = np.einsum('ij,ij->i', features, features)
+        candidate_indices = image['sham_indices']
+        if not len(candidate_indices):
+            continue
+        controls = features[candidate_indices]
+        c_norm2 = norms[candidate_indices]
+        for entry in image['target_entries']:
+            guard()
+            anchor, phase, target_index = entry['anchor_id'], entry['target_phase'], entry['feature_index']
+            base = bank_array[anchor].astype(np.float64)
+            target = features[target_index]
+            t_b2 = float(np.sum((target-base)**2))
+            c_b2 = np.sum((controls-base)**2, axis=1)
+            t_c2 = np.sum((controls-target)**2, axis=1)
+            t_residual2 = float(seconds[target_index] if nearest[target_index] == anchor else values[target_index])
+            c_residual2 = np.where(nearest[candidate_indices] == anchor, seconds[candidate_indices], values[candidate_indices]).astype(np.float64)
+            t_norm2 = float(norms[target_index])
+            denominator_replace = (t_b2+c_b2)/2
+            denominator_residual = (t_residual2+c_residual2)/2
+            denominator_direct = (math.sqrt(t_b2)+np.sqrt(c_b2))/2
+            positive = (denominator_replace > 0)&(denominator_residual > 0)&(denominator_direct > 0)&((t_norm2+c_norm2) > 0)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                replace = np.abs(t_b2-c_b2)/denominator_replace
+                residual = np.abs(t_residual2-c_residual2)/denominator_residual
+                direct = np.sqrt(t_c2)/denominator_direct
+                norm_relative = np.abs(t_norm2-c_norm2)/((t_norm2+c_norm2)/2)
+                cost = replace/.1+residual/.1+direct/.5
+            finite = positive&np.isfinite(cost)&np.isfinite(norm_relative)
+            replace_pass = finite&(replace <= .1)
+            residual_pass = finite&(residual <= .1)
+            direct_pass = finite&(direct <= .5)
+            all_pass = replace_pass&residual_pass&direct_pass
+            gate_counts['candidate_pairs_total'] += len(controls)
+            for name, mask in [('positive_finite', finite), ('replace', replace_pass), ('residual', residual_pass),
+                               ('direct', direct_pass), ('replace_and_residual', replace_pass&residual_pass),
+                               ('all_hard_gates', all_pass), ('norm_2percent_descriptive_only', finite&(norm_relative <= .02))]:
+                gate_counts[name] += int(mask.sum())
+            if np.any(finite):
+                current_min = float(direct[finite].min())
+                minimum_direct = current_min if minimum_direct is None else min(minimum_direct, current_min)
+            def record(index):
+                control_feature_index = int(candidate_indices[index])
+                control_cell = int(image['cells'][control_feature_index])
+                target_cell = int(image['cells'][target_index])
+                return {**{key: metadata[key] for key in p.IDENTITY}, 'anchor_id': anchor,
+                        'anchor_row': int(bank_meta[anchor]['row']), 'anchor_col': int(bank_meta[anchor]['col']),
+                        'target_phase': phase, 'target_cell': target_cell, 'target_row': target_cell//64, 'target_col': target_cell%64,
+                        'sham_cell': control_cell, 'sham_row': control_cell//64, 'sham_col': control_cell%64,
+                        't_norm2': t_norm2, 'c_norm2': float(c_norm2[index]), 't_b2': t_b2, 'c_b2': float(c_b2[index]),
+                        't_c2': float(t_c2[index]), 't_residual2': t_residual2, 'c_residual2': float(c_residual2[index]),
+                        'norm_relative': float(norm_relative[index]), 'replace_relative': float(replace[index]),
+                        'residual_relative': float(residual[index]), 'direct_ratio': float(direct[index]), 'cost': float(cost[index]),
+                        'all_hard_gates': bool(all_pass[index])}
+            eligible = np.flatnonzero(finite)
+            if len(eligible):
+                closest = min(eligible.tolist(), key=lambda j: (float(cost[j]), int(image['cells'][int(candidate_indices[j])])) )
+                best_finite_anchor_rows.append(record(closest))
+            candidate_summary = {**{key: metadata[key] for key in p.IDENTITY}, 'anchor_id': anchor, 'target_phase': phase,
+                                 'candidate_pairs_total': len(controls), 'positive_finite': int(finite.sum()),
+                                 'replace_pass': int(replace_pass.sum()), 'residual_pass': int(residual_pass.sum()),
+                                 'direct_pass': int(direct_pass.sum()), 'replace_and_residual': int((replace_pass&residual_pass).sum()),
+                                 'all_hard_gates': int(all_pass.sum()),
+                                 'norm_2percent_descriptive_only': int((finite&(norm_relative <= .02)).sum()),
+                                 'minimum_direct_ratio': float(direct[finite].min()) if np.any(finite) else None,
+                                 'best_finite_cost': float(cost[finite].min()) if np.any(finite) else None}
+            best_anchor_rows.append(candidate_summary)
+            legal = np.flatnonzero(all_pass)
+            if len(legal):
+                chosen = min(legal.tolist(), key=lambda j: (float(cost[j]), int(image['cells'][int(candidate_indices[j])])) )
+                item = record(chosen)
+                best_legal_anchor_rows.append(item)
+                key = metadata['path'], phase
+                previous = best_source.get(key)
+                if previous is None or (item['cost'], item['anchor_id'], item['sham_cell']) < (previous['cost'], previous['anchor_id'], previous['sham_cell']):
+                    best_source[key] = item
+        del features, controls, values, nearest, seconds
+    best_rows = sorted(best_source.values(), key=lambda row: (int(row['camera']), source_key(row['path']), row['target_phase']))
+    csvsave('best_candidate_by_anchor_phase.csv', best_anchor_rows)
+    csvsave('best_finite_pair_by_anchor_phase.csv', best_finite_anchor_rows)
+    csvsave('best_legal_pair_by_anchor_phase.csv', best_legal_anchor_rows)
+    csvsave('best_pair_by_source_phase.csv', best_rows)
+    problems, selected, failures = {}, [], []
+    for camera in ('1', '2', '3', '4', '5'):
+        # Include all source images of this camera, even when none has a legal pair.
+        sources = sorted({image['row']['path'] for image in pool if image['row']['camera'] == camera}, key=source_key)
+        phases = [phase for phase in PHASES for _ in range(QUOTA)]
+        matrix = np.full((len(sources), len(phases)), SENTINEL, dtype=np.float64)
+        for i, path in enumerate(sources):
+            for j, phase in enumerate(phases):
+                if (path, phase) in best_source:
+                    matrix[i, j] = best_source[path, phase]['cost']
+        indices, slots = linear_sum_assignment(matrix)
+        legal = len(slots) == 48 and all(matrix[i, j] < SENTINEL for i, j in zip(indices, slots))
+        problems[camera] = {'row_source_paths': sources, 'column_target_phases': phases, 'costs': matrix.tolist(),
+                            'assignment_rows': indices.tolist(), 'assignment_columns': slots.tolist(),
+                            'all_slots_legal': bool(legal), 'assignment_total_cost': float(matrix[indices, slots].sum()),
+                            'sentinel_selections': int(np.sum(matrix[indices, slots] == SENTINEL)),
+                            'legal_image_phase_edges': int(np.sum(matrix < SENTINEL)//QUOTA)}
+        if not legal:
+            failures.append(camera)
+        else:
+            for i, j in zip(indices.tolist(), slots.tolist()):
+                selected.append({**best_source[sources[i], phases[j]], 'assignment_column': j})
+    save('assignment_problem.json', {'solver': 'scipy.optimize.linear_sum_assignment', 'scipy_version': scipy.__version__,
+                                    'sentinel': SENTINEL, 'legal_cost_max': 3., 'full_legal_camera_assignment_cost_max': 144.,
+                                    'source_order': "(sha256('p2-source-order-v1:'+path),path)",
+                                    'best_pair_tie_order': ['cost', 'anchor_id', 'sham_cell'],
+                                    'slot_phases': [phase for phase in PHASES for _ in range(QUOTA)], 'cameras': problems})
+    audit = {'status': 'MATCHING_PASS' if not failures else 'MATCHING_INCONCLUSIVE',
+             'reason': None if not failures else 'No full legal assignment in the fixed source-image/phase candidate graph',
+             'gate_counts': dict(gate_counts), 'minimum_direct_ratio': minimum_direct,
+             'best_source_phase_rows': len(best_rows), 'best_legal_anchor_phase_rows': len(best_legal_anchor_rows),
+             'eligible_anchor_count': len({entry['anchor_id'] for image in pool for entry in image['target_entries']}),
+             'eligible_anchor_phase_count': sum(len(image['target_entries']) for image in pool),
+             'failed_cameras': failures, 'assignment_passed': not failures,
+             'assignment_problem_sha256': p.sha(OUT/'assignment_problem.json'),
+             'camera_assignment_summary': {key: {field: value[field] for field in ('all_slots_legal', 'assignment_total_cost', 'sentinel_selections', 'legal_image_phase_edges')} for key, value in problems.items()},
+             'K': K, 'selected_pairs_from_successful_cameras': len(selected),
+             'norm_2percent_is_hard_gate': False, 'query_pixels_requested': 0,
+             'matching_seconds': time.perf_counter()-started}
+    if not failures:
+        assert len(selected) == K and len({row['path'] for row in selected}) == K
+        assert len({row['anchor_id'] for row in selected}) == K
+        for camera in ('1', '2', '3', '4', '5'):
+            for phase in PHASES:
+                assert sum(row['camera'] == camera and row['target_phase'] == phase for row in selected) == QUOTA
+        csvsave('selected_pairs.csv', selected)
+    save('matching_audit.json', audit)
+    return selected if not failures else None, audit
+
+
+def build_banks(np, pool, bank, bank_meta, selected):
+    lookup = {image['row']['path']: image for image in pool}
+    banks = {method: bank.copy() for method in METHODS}
+    origins = {method: [dict(row) for row in bank_meta] for method in METHODS}
+    for pair in selected:
+        image = lookup[pair['path']]
+        anchor = pair['anchor_id']
+        for method in ('target', 'sham'):
+            cell = pair[method+'_cell']
+            index = np.flatnonzero(image['cells'] == cell)
+            assert len(index) == 1
+            banks[method][anchor] = image['features'][index[0]]
+            origins[method][anchor]['row'] = cell//64
+            origins[method][anchor]['col'] = cell%64
+    export = []
+    for method in METHODS:
+        identity = {(row['path'], int(row['row']), int(row['col'])) for row in origins[method]}
+        assert len(identity) == 4096
+        for index, row in enumerate(origins[method]):
+            assert int(row['prototype']) == index
+            export.append({'method': method, **row})
+    csvsave('bank_identities.csv', export)
+    return banks, origins
+
+
+def fit_coverage(np, torch, pool, banks, origins, guard):
+    """Normal fit probes; remove all same-source-group prototypes in each arm."""
+    per_view = []
+    norms = {method: (bank*bank).sum(1) for method, bank in banks.items()}
+    for image in pool:
+        row = image['row']
+        for method, bank in banks.items():
+            guard()
+            banned = [index for index, identity in enumerate(origins[method]) if identity['group_key'] == row['group_key']]
+            assert 0 < len(banned) < 4096
+            with torch.no_grad():
+                q = torch.from_numpy(np.ascontiguousarray(image['probe_features'])).cuda()
+                distances = (q*q).sum(1, keepdim=True)+norms[method][None]-2*(q@bank.T)
+                distances.clamp_min_(0)
+                distances[:, banned] = float('inf')
+                values = distances.min(1).values.cpu().numpy()
+            assert values.shape == (64,) and np.isfinite(values).all()
+            per_view.append({**{key: row[key] for key in p.IDENTITY}, 'method': method,
+                             'probe_count': 64, 'excluded_prototypes': len(banned),
+                             'mean': float(values.mean()), 'p95': float(np.quantile(values, .95)),
+                             'p99': float(np.quantile(values, .99))})
+    groups = defaultdict(list)
+    for row in per_view:
+        groups[row['method'], row['group_key']].append(row)
+    group_rows = []
+    for (method, group), rr in sorted(groups.items()):
+        assert len(rr) == 5 and {row['camera'] for row in rr} == {'1', '2', '3', '4', '5'}
+        group_rows.append({'method': method, 'group_key': group, 'views': 5,
+                           **{key: float(np.mean([row[key] for row in rr])) for key in ('mean', 'p95', 'p99')}})
+    summary = {}
+    for method in METHODS:
+        rr = [row for row in group_rows if row['method'] == method]
+        assert len(rr) == 175
+        summary[method] = {key: float(np.mean([row[key] for row in rr])) for key in ('mean', 'p95', 'p99')}
+    residual, change = {}, {}
+    passed = True
+    for key, tolerance in (('mean', .005), ('p95', .01), ('p99', .01)):
+        assert summary['base'][key] > 0
+        difference = abs(summary['target'][key]-summary['sham'][key])/summary['base'][key]
+        residual[key] = {'absolute_difference_relative_to_base': difference, 'tolerance': tolerance, 'pass': bool(difference <= tolerance)}
+        passed = passed and difference <= tolerance
+        change[key] = {method: summary[method][key]/summary['base'][key]-1 for method in ('target', 'sham')}
+    csvsave('fit_coverage_views.csv', per_view)
+    csvsave('fit_coverage_groups.csv', group_rows)
+    result = {'status': 'FIT_COVERAGE_MATCH_PASS' if passed else 'MATCHING_INCONCLUSIVE',
+              'summary': summary, 'residuals': residual, 'changes_relative_to_base_descriptive': change,
+              'improvement_is_required': False, 'views': 875, 'groups': 175, 'probes_per_view': 64,
+              'probe_regions': '16 from each phase; excludes all four fine cells of each original256 coarse candidate',
+              'source_group_exclusion': True, 'query_pixels_requested': 0}
+    save('fit_coverage_audit.json', result)
+    return passed, result
+
+
+def worker(nonce):
+    started_total = time.perf_counter()
+    assert p.read(OUT/'execution_claim.json')['nonce'] == nonce
+    plan, preflight, prior = check_admission()
+    import numpy as np
+    from PIL import Image
+    s = p.load_static()
+    roles = s.load_manifest()['plastic_nut']
+    assert {key: len(value) for key, value in roles.items()} == p.COUNTS
+    inputs = {row['path']: row for row in p.rows(p.OLD/'attempt02/results/plastic_nut/inputs.csv')}
+    allowed = {row['path'] for role in s.RUN_ROLES for row in roles[role]}
+    assert set(inputs) == allowed and len(allowed) == 2010
+    spec = importlib.util.spec_from_file_location('p2_transport_helpers', p.HELPER)
+    h = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(h)
+    h.OUT = OUT
+    state = {'compute_seconds': 0., 'active_compute_start': None, 'segments': [], 'transport_events': [],
+             'query_pixels_requested': 0, 'query_images_decoded': 0, 'fit_images_decoded': 0,
+             'fit_coverage_seconds': 0., 'matching_seconds': 0., 'timings': defaultdict(float),
+             'host_memory': [], 'peak_cuda_allocated_bytes': None, 'status': 'STARTED'}
+    wall_deadline = started_total+(5400-prior['wall_seconds'])
+    token = None
+    def wall_guard():
+        assert time.perf_counter() < wall_deadline, 'Shared P1+P2 wall budget exhausted'
+    def acquire(selected, kind):
+        nonlocal token
+        if token is None:
+            token = h.local_token()
+        deadline = min(wall_deadline, time.perf_counter()+plan['resources']['image_acquisition_seconds'])
+        for attempt in range(3):
+            try:
+                ram = h.acquire('plastic_nut', {path: inputs[path] for path in selected}, token, deadline, kind)
+                state['transport_events'].append({'kind': kind, 'attempt': attempt+1, 'status': 'PASS'})
+                assert time.perf_counter() <= deadline
+                return ram
+            except h.transport.RangeError as error:
+                transient = str(error) == 'transport failure; no credentials logged'
+                state['transport_events'].append({'kind': kind, 'attempt': attempt+1, 'status': 'TRANSIENT' if transient else 'VALIDATION_FAILURE', 'partial_response_bytes': 'UNKNOWN'})
+                if not transient or attempt == 2 or time.perf_counter() >= deadline:
+                    raise
+    class Segment:
+        def __init__(self, name):
+            self.name = name
+        def __enter__(self):
+            wall_guard()
+            remaining = 1800-prior['gpu_wall_seconds']-state['compute_seconds']
+            assert remaining > 0
+            state['active_compute_start'] = time.perf_counter()
+            self.budget = s.Budget(min(wall_deadline, state['active_compute_start']+remaining), 40*1024**3, s.WindowsHostMemory())
+            self.budget.__enter__()
+            return self.budget
+        def __exit__(self, exc_type, exc, tb):
+            duration = time.perf_counter()-state['active_compute_start']
+            state['compute_seconds'] += duration
+            state['active_compute_start'] = None
+            state['segments'].append({'name': self.name, 'compute_wall_seconds': duration})
+            try:
+                state['host_memory'].append(self.budget.memory_report())
+                torch_module = sys.modules.get('torch')
+                if torch_module is not None and torch_module.cuda.is_initialized():
+                    observed = int(torch_module.cuda.max_memory_allocated())
+                    state['peak_cuda_allocated_bytes'] = max(state['peak_cuda_allocated_bytes'] or 0, observed)
+            finally:
+                self.budget.__exit__(exc_type, exc, tb)
+    try:
+        fit = roles['source_fit']
+        ram = acquire([row['path'] for row in fit], 'fit_image')
+        old = [row for row in p.rows(p.UP/'new_bank_source_identities.csv') if row['method'] == 'dino_odd_own']
+        assert len(old) == 4096 and [int(row['prototype']) for row in old] == list(range(4096))
+        fit_meta = {row['path']: row for row in fit}
+        bank_meta = [{key: value for key, value in row.items() if key != 'method'} for row in old]
+        by_path = defaultdict(list)
+        for row in bank_meta:
+            row['prototype'], row['row'], row['col'] = int(row['prototype']), int(row['row']), int(row['col'])
+            row.update(group_key=fit_meta[row['path']]['group_key'], camera=fit_meta[row['path']]['camera'])
+            by_path[row['path']].append(row)
+        pool, probe_ids = [], []
+        bank_array = np.empty((4096, 768), dtype=np.float32)
+        with Segment('fit_encode_match_coverage') as budget:
+            base = p.load_core()
+            torch = base.torch
+            torch.cuda.reset_peak_memory_stats()
+            model = p.load_dino(torch)
+            def embed(row, ram, role):
+                budget.check()
+                wall_guard()
+                assert row['research_role'] in s.RUN_ROLES and row['path'] in ram
+                begin = time.perf_counter()
+                with Image.open(io.BytesIO(ram[row['path']])) as im:
+                    assert im.size == (1024, 1024)
+                    a = np.array(im.convert('RGB').resize((896, 896), Image.Resampling.BILINEAR), dtype=np.float32)/255.
+                x = torch.from_numpy(a.transpose(2, 0, 1)).cuda()
+                x = (x-torch.tensor([.485, .456, .406], device='cuda')[:, None, None])/torch.tensor([.229, .224, .225], device='cuda')[:, None, None]
+                with torch.no_grad():
+                    features = model.get_intermediate_layers(x[None], n=(11,), norm=True)[0][0].cpu().numpy()
+                assert features.shape == (4096, 768) and np.isfinite(features).all()
+                state['timings'][role+'_decode_embed_seconds'] += time.perf_counter()-begin
+                return features
+            for i, row in enumerate(fit):
+                features = embed(row, ram, 'fit')
+                state['fit_images_decoded'] += 1
+                odd = p.candidates(np, row['path'])['odd']
+                probes = fit_probe_cells(np, row['path'], odd)
+                cells = odd.tolist()
+                entries = []
+                original_cells = {64*r['row']+r['col'] for r in by_path[row['path']]}
+                for origin in by_path[row['path']]:
+                    anchor = origin['prototype']
+                    rr, cc = origin['row'], origin['col']
+                    bank_array[anchor] = features[64*rr+cc]
+                    if 3 <= rr <= 61 and 3 <= cc <= 61:
+                        for phase in PHASES:
+                            cell = 64*(rr-1+int(phase[0]))+cc-1+int(phase[1])
+                            entries.append({'anchor_id': anchor, 'target_phase': phase, 'feature_index': len(cells)})
+                            cells.append(cell)
+                assert len(set(cells)) == len(cells)
+                sham_indices = np.asarray([index for index, cell in enumerate(odd) if int(cell) not in original_cells
+                                           and 1 <= int(cell)//64 <= 62 and 1 <= int(cell)%64 <= 62], dtype=np.int64)
+                pool.append({'row': row, 'cells': np.asarray(cells, dtype=np.int64), 'features': features[cells].copy(),
+                             'sham_indices': sham_indices, 'target_entries': entries, 'probe_features': features[probes].copy()})
+                probe_ids.append({**{key: row[key] for key in p.IDENTITY}, 'probe_cells': probes.tolist()})
+                if (i+1)%100 == 0:
+                    print('SOURCE_DINO896', i+1, flush=True)
+            ram.clear()
+            del features
+            gc.collect()
+            base_hash = hashlib.sha256(bank_array.tobytes()).hexdigest()
+            assert base_hash == p.read(p.UP/'prediction_freeze.json')['bank_hashes']['dino_odd_own']
+            assert base_hash == p.read(P1/'prediction_freeze.json')['bank_hashes']['odd_s0']
+            save('base_reconstruction.json', {'status': 'EXACT_SOURCE_FIT_BANK_RECONSTRUCTION', 'base_bank_sha256': base_hash,
+                                              'upstream_B_bank_sha256': p.read(p.UP/'prediction_freeze.json')['bank_hashes']['dino_odd_own'],
+                                              'upstream_P1_bank_sha256': p.read(P1/'prediction_freeze.json')['bank_hashes']['odd_s0'],
+                                              'prototype_count': 4096, 'source_group_count': len({row['group_key'] for row in bank_meta}),
+                                              'source_image_count': len({row['path'] for row in bank_meta}), 'query_pixels_requested': 0})
+            save('fit_probe_identities.json', {'probe_seed_rule': "little-endian8byteSHA256('p2-fit-probe-v1:'+path)", 'rows': probe_ids})
+            bank_tensor = torch.from_numpy(bank_array).cuda()
+            selected, match_audit = match_pairs(np, torch, pool, bank_array, bank_tensor, bank_meta, budget.check)
+            state['matching_seconds'] = match_audit['matching_seconds']
+            if selected is None:
+                state['status'] = 'MATCHING_INCONCLUSIVE'
+                save('result.json', {'status': state['status'], 'stage_reached': 'pair_matching', 'matching': match_audit,
+                                     'query_pixels_requested': 0, 'confirmation_access': 0, 'no_scientific_mechanism_verdict': True})
+                return
+            bank_arrays, origins = build_banks(np, pool, bank_array, bank_meta, selected)
+            bank_hashes = {method: hashlib.sha256(value.tobytes()).hexdigest() for method, value in bank_arrays.items()}
+            banks = {method: torch.from_numpy(value).cuda() for method, value in bank_arrays.items()}
+            begin = time.perf_counter()
+            coverage_pass, coverage_audit = fit_coverage(np, torch, pool, banks, origins, budget.check)
+            state['fit_coverage_seconds'] = time.perf_counter()-begin
+            save('intervention_freeze.json', {'status': 'FIT_MATCH_FROZEN_BEFORE_CALIBRATION_AND_DEVELOPMENT_PIXELS' if coverage_pass else 'MATCHING_INCONCLUSIVE',
+                                             'bank_hashes': bank_hashes, 'selected_pairs_sha256': p.sha(OUT/'selected_pairs.csv'),
+                                             'bank_identities_sha256': p.sha(OUT/'bank_identities.csv'), 'plan_sha256': p.sha(OUT/'plan.json'),
+                                             'producer_sha256': p.sha(__file__), 'query_pixels_requested': 0,
+                                             'fit_coverage_pass': bool(coverage_pass), 'matching_pass': True})
+            if not coverage_pass:
+                state['status'] = 'MATCHING_INCONCLUSIVE'
+                save('result.json', {'status': state['status'], 'stage_reached': 'joint_fit_coverage',
+                                     'fit_coverage': coverage_audit, 'query_pixels_requested': 0,
+                                     'confirmation_access': 0, 'no_scientific_mechanism_verdict': True})
+                return
+            del pool, bank_arrays, bank_array, bank_tensor
+            gc.collect()
+            torch.cuda.empty_cache()
+            state['peak_cuda_allocated_bytes'] = max(state['peak_cuda_allocated_bytes'] or 0, int(torch.cuda.max_memory_allocated()))
+            budget.check()
+        # Query acquisition occurs only after the once-only pair and fit gates pass.
+        query = roles['source_calibration']+roles['development']
+        state['query_pixels_requested'] = len(query)
+        ram = acquire([row['path'] for row in query], 'query_image')
+        old_scores = {row['path']: row for row in p.rows(p.UP/'scalar_predictions.csv')}
+        scores, spatial, normal = [], [], []
+        error = 0.
+        with Segment('calibration_development_encode_match') as budget:
+            masks = p.region_masks(np)
+            for i, row in enumerate(query):
+                features = embed(row, ram, 'query')
+                state['query_images_decoded'] += 1
+                score = {key: row[key] for key in p.IDENTITY}
+                for method in METHODS:
+                    budget.check()
+                    begin = time.perf_counter()
+                    distances = base.nearest_squared(features, banks[method])
+                    state['timings']['nearest_'+method+'_seconds'] += time.perf_counter()-begin
+                    score[method] = float(distances.max())
+                    spatial.append(p.summarize(np, row, method, distances, masks))
+                    if method == 'base':
+                        delta = abs(score[method]-float(old_scores[row['path']]['dino_odd_own']))
+                        error = max(error, delta)
+                        assert delta == 0
+                    if row['research_role'] == 'source_calibration':
+                        normal.append({**{key: row[key] for key in p.IDENTITY}, 'method': method,
+                                       'mean_squared_nearest': float(distances.mean()),
+                                       'p95_squared_nearest': float(np.quantile(distances, .95)),
+                                       'max_squared_nearest': float(distances.max())})
+                scores.append(score)
+                if (i+1)%100 == 0:
+                    print('QUERY_DINO896', i+1, flush=True)
+            state['peak_cuda_allocated_bytes'] = max(state['peak_cuda_allocated_bytes'] or 0, int(torch.cuda.max_memory_allocated()))
+            budget.check()
+            del banks, model, features, distances
+            gc.collect()
+            torch.cuda.empty_cache()
+        ram.clear()
+        gc.collect()
+        assert len(scores) == 1135 and len(spatial) == 1135*3 and len(normal) == 380*3
+        csvsave('scalar_predictions.csv', scores)
+        csvsave('spatial_statistics.csv', spatial)
+        csvsave('normal_calibration_coverage.csv', normal)
+        state['status'] = 'P2_PREDICTIONS_FROZEN'
+        save('prediction_freeze.json', {'status': state['status'], 'methods': list(METHODS), 'input_roles': p.COUNTS,
+                                       'bank_hashes': bank_hashes, 'reproduced_controls_max_error': {'base': error},
+                                       'query_rows': 1135, 'fit_embedded_images': 875, 'query_cells': 4096,
+                                       'gpu_wall_seconds': state['compute_seconds'],
+                                       'total_p1_p2_gpu_wall_seconds': prior['gpu_wall_seconds']+state['compute_seconds'],
+                                       'plan_sha256': p.sha(OUT/'plan.json'), 'producer_sha256': p.sha(__file__),
+                                       'sha256_files': {name: p.sha(OUT/name) for name in ('scalar_predictions.csv', 'spatial_statistics.csv', 'normal_calibration_coverage.csv', 'selected_pairs.csv', 'bank_identities.csv')},
+                                       'confirmation_access': 0, 'masks_requested': 0, 'payload_saved': False,
+                                       'before_development_labels': True})
+        print('P2_PREDICTIONS_FROZEN', flush=True)
+    finally:
+        del token
+        # Matching-inconclusive paths and exceptions still leave a resource receipt.
+        elapsed = time.perf_counter()-started_total
+        total_compute = state['compute_seconds']
+        if state['active_compute_start'] is not None:
+            total_compute += time.perf_counter()-state['active_compute_start']
+        save('transport_attempts.json', state['transport_events'])
+        size = sum(path.stat().st_size for folder in (P1, OUT) for path in folder.rglob('*') if path.is_file())
+        receipt = {'status': state['status'], 'worker_wall_seconds': elapsed, 'gpu_wall_seconds': total_compute,
+                   'prior_p1_gpu_wall_seconds': prior['gpu_wall_seconds'], 'total_p1_p2_gpu_wall_seconds': prior['gpu_wall_seconds']+total_compute,
+                   'prior_p1_execution_wall_seconds': prior['wall_seconds'], 'total_p1_p2_worker_execution_wall_seconds': prior['wall_seconds']+elapsed,
+                   'segments': state['segments'], 'timings': dict(state['timings']), 'matching_seconds': state['matching_seconds'],
+                   'fit_coverage_seconds': state['fit_coverage_seconds'], 'host_memory': state['host_memory'],
+                   'peak_cuda_allocated_bytes': state['peak_cuda_allocated_bytes'],
+                   'fit_images_decoded': state['fit_images_decoded'], 'query_pixels_requested': state['query_pixels_requested'],
+                   'query_images_decoded': state['query_images_decoded'], 'confirmation_access': 0,
+                   'p1_p2_persisted_bytes_before_receipt': size, 'limits': {'gpu_wall_seconds': 1800, 'wall_seconds': 5400, 'rss_bytes': 40*1024**3, 'persisted_bytes': 100*1024**2},
+                   'gpu_definition': 'Sum of fit and query computation segment wall times including CPU matching. Between-segment query transport counts only total wall; no budget reset.',
+                   'historical_budget_refunded': False}
+        bound_names = ('base_reconstruction.json', 'fit_probe_identities.json', 'best_candidate_by_anchor_phase.csv',
+                       'best_finite_pair_by_anchor_phase.csv', 'best_legal_pair_by_anchor_phase.csv', 'best_pair_by_source_phase.csv', 'assignment_problem.json',
+                       'selected_pairs.csv', 'matching_audit.json', 'fit_coverage_views.csv', 'fit_coverage_groups.csv',
+                       'fit_coverage_audit.json', 'bank_identities.csv', 'intervention_freeze.json', 'result.json',
+                       'scalar_predictions.csv', 'spatial_statistics.csv', 'normal_calibration_coverage.csv',
+                       'prediction_freeze.json', 'transport_attempts.json', 'plastic_nut_fit_image_receipt.json',
+                       'plastic_nut_query_image_receipt.json')
+        receipt['sha256_files'] = {name: p.sha(OUT/name) for name in bound_names if (OUT/name).is_file()}
+        save('resource_receipt.json', receipt)
+        assert receipt['total_p1_p2_gpu_wall_seconds'] <= 1800
+        assert receipt['total_p1_p2_worker_execution_wall_seconds'] <= 5400
+        assert size+100000 < 100*1024**2
+
+
+def safe_failure(error):
+    if not (OUT/'failure.json').exists():
+        save('failure.json', {'status': 'STOP_SANITIZED_FAILURE', 'error_type': type(error).__name__,
+                              'stack': [{'file': Path(frame.filename).name, 'line': frame.lineno, 'function': frame.name}
+                                        for frame in traceback.extract_tb(error.__traceback__)]})
+    print('P2_WORKER_STOP', type(error).__name__, flush=True)
+
+
+def main():
+    if len(sys.argv) == 3 and sys.argv[1] == '--worker':
+        worker(sys.argv[2])
+        return 0
+    assert len(sys.argv) == 1
+    plan, preflight, prior = check_admission()
+    assert not (OUT/'execution_claim.json').exists()
+    nonce = uuid.uuid4().hex
+    save('execution_claim.json', {'nonce': nonce, 'parent_pid': os.getpid(), 'producer_sha256': p.sha(__file__), 'prior_resource_use': prior})
+    started = time.perf_counter()
+    try:
+        result = subprocess.run([sys.executable, '-B', str(Path(__file__)), '--worker', nonce], timeout=5400-prior['wall_seconds'])
+        save('supervisor.json', {'exit_code': result.returncode, 'timeout': False, 'wall_seconds': time.perf_counter()-started, 'prior_p1_wall_seconds': prior['wall_seconds']})
+        return result.returncode
+    except subprocess.TimeoutExpired:
+        save('supervisor.json', {'exit_code': None, 'timeout': True, 'wall_seconds': time.perf_counter()-started, 'prior_p1_wall_seconds': prior['wall_seconds']})
+        return 1
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except BaseException as error:
+        if isinstance(error, SystemExit):
+            raise
+        safe_failure(error)
+        sys.exit(1)

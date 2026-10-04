@@ -1,0 +1,267 @@
+{
+  "unit": "76 five-view source-normal groups",
+  "seed": 20261012,
+  "bootstrap_samples": 5000,
+  "endpoints": {
+    "full": {
+      "mean_log_contrast": 0.10994051408941644,
+      "conditional_percentile95": [
+        0.10142763879102372,
+        0.11880952207841883
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.1162116696163624,
+      "positive_lower_bound": true
+    },
+    "top_left": {
+      "mean_log_contrast": 0.40947543937235403,
+      "conditional_percentile95": [
+        0.40025887759257994,
+        0.41839615245482403
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.5060275751043954,
+      "positive_lower_bound": true
+    },
+    "interior": {
+      "mean_log_contrast": 0.08548415164191868,
+      "conditional_percentile95": [
+        0.07776838164550709,
+        0.0934103131609796
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.0892442984735917,
+      "positive_lower_bound": true
+    },
+    "spatial_interaction": {
+      "mean_log_contrast": 0.3239912877304355,
+      "conditional_percentile95": [
+        0.3121770178905289,
+        0.3351038031667128
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.3826352611759012,
+      "positive_lower_bound": true
+    }
+  },
+  "diagnostic_gate_pass": true,
+  "innovation_proven": false,
+  "per_camera": [
+    {
+      "camera": 1,
+      "endpoint": "full",
+      "mean_log_contrast": 0.04735897703267535,
+      "conditional_percentile95": [
+        0.028162281436638566,
+        0.06575837120740148
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.048498328349303,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 1,
+      "endpoint": "top_left",
+      "mean_log_contrast": 0.34368267692837606,
+      "conditional_percentile95": [
+        0.3137057309779362,
+        0.37213138466201845
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.4101310973731351,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 1,
+      "endpoint": "interior",
+      "mean_log_contrast": 0.006399412647905123,
+      "conditional_percentile95": [
+        -0.008756710559754357,
+        0.02002158070224719
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.006419932637632,
+      "positive_lower_bound": false
+    },
+    {
+      "camera": 1,
+      "endpoint": "spatial_interaction",
+      "mean_log_contrast": 0.33728326428047095,
+      "conditional_percentile95": [
+        0.3055466321996047,
+        0.36842014851824956
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.4011358992835667,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 2,
+      "endpoint": "full",
+      "mean_log_contrast": 0.13520414199247835,
+      "conditional_percentile95": [
+        0.11416040526216718,
+        0.15537618917959517
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.1447704562212457,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 2,
+      "endpoint": "top_left",
+      "mean_log_contrast": 0.4376346151040198,
+      "conditional_percentile95": [
+        0.41813291063395147,
+        0.4570740906311976
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.5490388086198745,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 2,
+      "endpoint": "interior",
+      "mean_log_contrast": 0.13520414199247835,
+      "conditional_percentile95": [
+        0.11416040526216718,
+        0.15537618917959517
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.1447704562212457,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 2,
+      "endpoint": "spatial_interaction",
+      "mean_log_contrast": 0.3024304731115414,
+      "conditional_percentile95": [
+        0.27587636073257593,
+        0.32865817080361803
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.3531435932868774,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 3,
+      "endpoint": "full",
+      "mean_log_contrast": 0.19385449481269484,
+      "conditional_percentile95": [
+        0.17376142893075996,
+        0.2141998950801578
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.213919638500829,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 3,
+      "endpoint": "top_left",
+      "mean_log_contrast": 0.515682351823834,
+      "conditional_percentile95": [
+        0.49911903658418105,
+        0.5315390282655881
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.674780901796706,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 3,
+      "endpoint": "interior",
+      "mean_log_contrast": 0.19385449481269484,
+      "conditional_percentile95": [
+        0.17376142893075996,
+        0.2141998950801578
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.213919638500829,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 3,
+      "endpoint": "spatial_interaction",
+      "mean_log_contrast": 0.3218278570111391,
+      "conditional_percentile95": [
+        0.29920784520480953,
+        0.3433047523872134
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.379647258911663,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 4,
+      "endpoint": "full",
+      "mean_log_contrast": 0.07444900316068115,
+      "conditional_percentile95": [
+        0.05765487100841717,
+        0.09110029308094181
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.0772904037157707,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 4,
+      "endpoint": "top_left",
+      "mean_log_contrast": 0.37916154491096926,
+      "conditional_percentile95": [
+        0.35842928123848805,
+        0.3989633727409223
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.4610590433330821,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 4,
+      "endpoint": "interior",
+      "mean_log_contrast": 0.005564642437478097,
+      "conditional_percentile95": [
+        -0.006816107007478277,
+        0.018367248899771586
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.0055801538186229,
+      "positive_lower_bound": false
+    },
+    {
+      "camera": 4,
+      "endpoint": "spatial_interaction",
+      "mean_log_contrast": 0.3735969024734912,
+      "conditional_percentile95": [
+        0.3471896917601137,
+        0.39877779454166046
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.452951351301842,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 5,
+      "endpoint": "full",
+      "mean_log_contrast": 0.09883595344855242,
+      "conditional_percentile95": [
+        0.08128062177364964,
+        0.11624094943741595
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.1038851961449712,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 5,
+      "endpoint": "top_left",
+      "mean_log_contrast": 0.3712160080945714,
+      "conditional_percentile95": [
+        0.34948610842684136,
+        0.39283598932764335
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.449496142472523,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 5,
+      "endpoint": "interior",
+      "mean_log_contrast": 0.08639806631903697,
+      "conditional_percentile95": [
+        0.07000955880663277,
+        0.10282837854416957
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.0902402298537668,
+      "positive_lower_bound": true
+    },
+    {
+      "camera": 5,
+      "endpoint": "spatial_interaction",
+      "mean_log_contrast": 0.28481794177553443,
+      "conditional_percentile95": [
+        0.2613685579296686,
+        0.30764326303210954
+      ],
+      "geometric_ratio_or_ratio_of_ratios": 1.3295199560439472,
+      "positive_lower_bound": true
+    }
+  ]
+}

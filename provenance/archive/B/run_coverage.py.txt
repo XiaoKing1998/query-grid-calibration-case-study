@@ -1,0 +1,154 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+import sys,pathlib,json,csv,time,hashlib,collections,importlib.util,io,gc,subprocess,traceback
+sys.dont_write_bytecode=True
+OUT=pathlib.Path(__file__).parent
+spec=importlib.util.spec_from_file_location('helpers',r'${RESEARCH_WORKSPACE}\industrial_ad_20261003_realiad_local_evidence\run_round.py');h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h);h.OUT=OUT
+s=h.s;OLD=h.OLD;save=h.save;csvsave=h.csvsave
+PREV=pathlib.Path(r'${RESEARCH_WORKSPACE}\industrial_ad_20261003_realiad_representation\attempt02')
+CAT='plastic_nut';METHODS=['wrn448','wrn_shared','wrn_native','dino_shared','dino_odd_own','dino_balanced_own']
+CONTRASTS=[('wrn_native','wrn_shared',.15,.10,.02),('dino_odd_own','dino_shared',.15,.10,.02),('dino_balanced_own','dino_odd_own',.05,.05,.01)]
+def worker():
+ import numpy as np
+ from PIL import Image
+ roles=s.load_manifest()[CAT];inputs={r['path']:r for r in csv.DictReader((OLD/f'attempt02/results/{CAT}/inputs.csv').open())};assert set(inputs)=={r['path'] for k in s.RUN_ROLES for r in roles[k]}
+ plan={'status':'FROZEN_BEFORE_NEW_PIXELS_AND_RESULTS','category':CAT,'scope':'single-category construction sanity, not a new backbone or innovation','question':'Do feature-space coreset ownership and fine-grid phase coverage explain degeneration caused by shared source prototype identities?','methods':METHODS,'contrasts':[{'candidate':a,'reference':b,'normal_cal_median_mean_distance_reduction_required':c,'matched_risk_supported_tpr_gain_required':d,'paired_mean_npauc_gain_required':e} for a,b,c,d,e in CONTRASTS],'candidate_budget':'256 candidates per875 source-fit views=224000 for each new bank; all new banks4096 prototypes; approximate greedy seed0 projection128 initialanchors10; sorted original source-fit order','dino_odd':'same path-hash coarse32 cells as previous experiment; sample odd/odd grid64 centers; choose own896 coreset rather than448 identity','dino_balanced':'same256 coarse cells per view; hash-permute phase assignments so each of4 fine-grid parities has64 candidates/view; choose own896 coreset using identical algorithm/budget','wrn_native':'256 hash-selected uniform unique cells on native56grid per source view; own WRN coreset; compare prior shared identities and original all-source-patch bank','controls':'Reconstruct prior shared896 and pairedWRN hashes and exact scores; originalWRN exact hash and scores; unchanged fullFOV bilinear ImageNetnorm FP32 squaredL2 max','predeclared_mechanism_evidence':'Each contrast requires independent-normal-cal coverage reduction, local paired group-bootstrap95CI lower>0 and required n-pAUC gain, supported groupTPR gain at matched empirical4.545% risk and conditional pairedCI lower>0; thresholds are research diagnostics only. Absence rejects proposed repair explanation at tested scale.','calibration':'source-normal image and separately five-view group-max rank95% strict>; normalcal not used in bank fitting','matched_risk':'development normals44; allow2 false-positive groups, threshold third-largest normal group score; not deployment calibration; report0,2,4 groups without tuning','uncertainty':'5000 paired acquisition-group bootstrap seed0; conditional fixed bank/calibration;3 contrasts uncorrected exploratory, not confirmatory population claims','normal_coverage':'per calibration view mean,p95,max nearest squared distance; persist scalars only; sourcefit candidates heldRAM only','exit':'No enlargement of categories or budgets in this round; recovery of existing baselines is implementation repair, never novelty. If all fail, stop this bank-construction sweep and evaluate a different mechanism separately.','jpeg_bytes':sum(int(r['jpeg_bytes']) for r in inputs.values()),'counts':{k:len(v) for k,v in roles.items()},'resource_limits':{'image_read_seconds':1800,'gpu_wall_seconds':900,'mask_read_seconds':600,'rss_bytes':40*1024**3,'supervisor_seconds':3500},'cost_mismatch':'DINO8964096 querycells768dim12MiB/bank; WRN4483136querycells1024dim16MiB/bank. OriginalWRN used all source patches, unlike224000 candidates/new bank. Shared banks inherited448selection. No added896budget.','transport':'exact selected-member Range; max2 retries only explicit transient transport failure; auth or validation failure stops. Log all attempts safely.','confirmation_access':0,'persistence':'code metadata hashes scalar scores coverage and derived metrics only; no pixels masks descriptors banks maps matrices','innovation_proven':False}
+ save('plan.json',plan);print('PLAN_FROZEN',flush=True)
+ transport_events=[];original_acquire=h.acquire
+ def acquire(receipts,token,deadline,kind):
+  for attempt in range(3):
+   try:
+    data=original_acquire(CAT,receipts,token,deadline,kind);transport_events.append({'phase':kind,'attempt':attempt+1,'status':'PASS'});save('transport_attempts.json',transport_events);return data
+   except h.transport.RangeError as e:
+    recover=str(e)=='transport failure; no credentials logged';transport_events.append({'phase':kind,'attempt':attempt+1,'status':'TRANSIENT_TRANSPORT_FAILURE' if recover else 'VALIDATION_FAILURE','partial_response_bytes':'UNKNOWN'});save('transport_attempts.json',transport_events)
+    if not recover or attempt==2 or time.perf_counter()>deadline:raise
+    print('BOUNDED_TRANSPORT_RETRY',kind,attempt+1,flush=True)
+ token=h.local_token();ram=acquire(inputs,token,time.perf_counter()+1800,'image')
+ started=time.perf_counter();maps={};scores=[];banks={};bankhash={};coverage=[];timings={'fetch_seconds':0.,'decode_preprocess_seconds':0.,'embedding_seconds':0.}
+ oldfreeze=json.loads((PREV/'prediction_freeze.json').read_text());oldpred={r['path']:r for r in csv.DictReader((PREV/'scalar_predictions.csv').open())};oldidentity=list(csv.DictReader((PREV/'source_prototype_identities.csv').open()));shared=collections.defaultdict(list)
+ for r in oldidentity:shared[r['path']].append(r)
+ with s.Budget(started+900,40*1024**3,s.WindowsHostMemory()) as budget:
+  base,wrn,buffers=s._load_backend(s.DEFAULT_CHECKPOINT,budget);torch=base.torch
+  checkpoint=pathlib.Path(r'${USER_HOME}\.cache\torch\hub\checkpoints\dinov2_vitb14_pretrain.pth');assert hashlib.sha256(checkpoint.read_bytes()).hexdigest()=='0b8b82f85de91b424aded121c7e1dcc2b7bc6d0adeea651bf73a13307fad8c73'
+  sys.path.insert(0,r'${PROJECT_ROOT}\artifacts\ram_ad_20260918\vendor\dinov2_source');from dinov2.hub.backbones import dinov2_vitb14
+  dino=dinov2_vitb14(pretrained=False);dino.load_state_dict(torch.load(checkpoint,map_location='cpu',weights_only=True),strict=True);dino.eval().requires_grad_(False).cuda()
+  def embed(row):
+   budget.check();assert row['research_role'] in s.RUN_ROLES and row['path'] in ram
+   with Image.open(io.BytesIO(ram[row['path']])) as im:
+    assert im.size==(1024,1024);a=np.array(im.convert('RGB').resize((896,896),Image.Resampling.BILINEAR),dtype=np.float32)/255.
+   x=torch.from_numpy(a.transpose(2,0,1)).cuda();x=(x-torch.tensor([.485,.456,.406],device='cuda')[:,None,None])/torch.tensor([.229,.224,.225],device='cuda')[:,None,None]
+   with torch.no_grad():y=dino.get_intermediate_layers(x[None],n=(11,),norm=True)[0][0].cpu().numpy()
+   assert y.shape==(4096,768) and np.isfinite(y).all();return y
+  fit=roles['source_fit'];oddpool=np.empty((len(fit)*256,768),np.float32);balpool=np.empty_like(oddpool);positions=[];balanced=[];banks['dino_shared']=np.empty((4096,768),np.float32)
+  for i,r in enumerate(fit):
+   seed=int.from_bytes(hashlib.sha256(('bank256:'+r['path']).encode()).digest()[:8],'little');pos=np.random.default_rng(seed).choice(1024,256,replace=False);rr=pos//32;cc=pos%32;odd=(2*rr+1)*64+2*cc+1
+   seed2=int.from_bytes(hashlib.sha256(('phase256:'+r['path']).encode()).digest()[:8],'little');phase=np.random.default_rng(seed2).permutation(np.tile(np.arange(4),64));assert np.array_equal(np.bincount(phase),[64]*4);bal=(2*rr+phase//2)*64+2*cc+phase%2
+   positions.append(odd);balanced.append(bal);feat=embed(r);oddpool[i*256:(i+1)*256]=feat[odd];balpool[i*256:(i+1)*256]=feat[bal]
+   for proto in shared[r['path']]:banks['dino_shared'][int(proto['prototype'])]=feat[int(proto['grid64_row'])*64+int(proto['grid64_col'])]
+   if (i+1)%100==0:print('SOURCE_DINO896',i+1,flush=True)
+  assert hashlib.sha256(banks['dino_shared'].tobytes()).hexdigest()==oldfreeze['bank_hashes']['dino896_last']
+  identities=[]
+  for method,pool,coords in [('dino_odd_own',oddpool,positions),('dino_balanced_own',balpool,balanced)]:
+   bank,ids=base.select_bank(pool,'adapted448','core4096',started+900);banks[method]=bank.copy()
+   for j,pid in enumerate(ids):
+    i,k=divmod(int(pid),256);cell=int(coords[i][k]);identities.append({'method':method,'prototype':j,'path':fit[i]['path'],'native_grid':64,'row':cell//64,'col':cell%64})
+  del oddpool,balpool,feat,bank;gc.collect();torch.cuda.empty_cache();print('DINO_BANKS_READY',flush=True)
+  pool=np.empty((len(fit)*256,1024),np.float32);wrnpositions=[]
+  for r in fit:
+   seed=int.from_bytes(hashlib.sha256(('native256:'+r['path']).encode()).digest()[:8],'little');wrnpositions.append(np.random.default_rng(seed).choice(3136,256,replace=False))
+  raw=np.empty((4096,1024),np.float32);paired=np.empty_like(raw);indices=np.load(OLD/f'attempt02/results/{CAT}/coreset_indices.npy');offset=seen=paired_seen=0;fitindex={r['path']:i for i,r in enumerate(fit)}
+  def fetch(row):assert row['research_role'] in s.RUN_ROLES;return ram[row['path']]
+  for rec,meta,features,grid in s._embedding_batches(fit,fetch,base,wrn,budget,timings):
+   flat=features.reshape(-1,1024);which=np.where((indices>=offset)&(indices<offset+len(flat)))[0];raw[which]=flat[indices[which]-offset];seen+=len(which);offset+=len(flat)
+   for r,feat in zip(rec,features):
+    i=fitindex[r['path']];pool[i*256:(i+1)*256]=feat[wrnpositions[i]]
+    for proto in shared[r['path']]:paired[int(proto['prototype'])]=feat[int(proto['grid56_row'])*56+int(proto['grid56_col'])];paired_seen+=1
+  assert seen==paired_seen==4096;assert hashlib.sha256(raw.tobytes()).hexdigest()==oldfreeze['bank_hashes']['wrn448'];assert hashlib.sha256(paired.tobytes()).hexdigest()==oldfreeze['bank_hashes']['wrn448_paired'];banks['wrn448']=raw;banks['wrn_shared']=paired
+  bank,ids=base.select_bank(pool,'adapted448','core4096',started+900);banks['wrn_native']=bank.copy()
+  for j,pid in enumerate(ids):
+   i,k=divmod(int(pid),256);cell=int(wrnpositions[i][k]);identities.append({'method':'wrn_native','prototype':j,'path':fit[i]['path'],'native_grid':56,'row':cell//56,'col':cell%56})
+  csvsave('new_bank_source_identities.csv',identities);del pool,bank,raw,paired,features;gc.collect();torch.cuda.empty_cache()
+  for k,bank in banks.items():bankhash[k]=hashlib.sha256(bank.tobytes()).hexdigest();banks[k]=torch.from_numpy(bank).cuda()
+  rows=roles['source_calibration']+roles['development'];by_path={}
+  def record(r,method,a):
+   by_path[r['path']][method]=float(a.max())
+   if r['research_role']=='development':maps.setdefault(r['path'],{})[method]=a.copy()
+   else:coverage.append({'method':method,'path':r['path'],'group_key':r['group_key'],'mean_squared_nearest':float(a.mean()),'p95_squared_nearest':float(np.quantile(a,.95)),'max_squared_nearest':float(a.max())})
+  for i,r in enumerate(rows):
+   feat=embed(r);by_path[r['path']]={k:r[k] for k in ['category','path','group_key','camera','research_role']}
+   for method in ['dino_shared','dino_odd_own','dino_balanced_own']:record(r,method,base.nearest_squared(feat,banks[method]).reshape(64,64))
+   if (i+1)%100==0:print('QUERY_DINO896',i+1,flush=True)
+  for role in ['source_calibration','development']:
+   for rec,meta,features,grid in s._embedding_batches(roles[role],fetch,base,wrn,budget,timings):
+    for method in ['wrn448','wrn_shared','wrn_native']:
+     patches=base.nearest_squared(features.reshape(-1,1024),banks[method]).reshape(len(rec),56,56)
+     for r,a in zip(rec,patches):record(r,method,a)
+  reproduction={k:max(abs(float(oldpred[path][oldkey])-r[k]) for path,r in by_path.items()) for k,oldkey in [('wrn448','wrn448'),('wrn_shared','wrn448_paired'),('dino_shared','dino896_last')]};assert all(v==0 for v in reproduction.values())
+  scores=[by_path[r['path']] for r in rows];cal=[r for r in scores if r['research_role']=='source_calibration'];tau={k:s.calibration_threshold([r[k] for r in cal]) for k in METHODS};gtau={}
+  for k in METHODS:
+   gs=collections.defaultdict(list)
+   for r in cal:gs[r['group_key']].append(r[k])
+   assert all(len(v)==5 for v in gs.values());gtau[k]=s.calibration_threshold([max(v) for v in gs.values()])
+  s.assert_bn_unchanged(base,wrn,buffers);gpu_seconds=time.perf_counter()-started;peak=torch.cuda.max_memory_allocated();del banks,wrn,dino,buffers,features,feat;gc.collect();torch.cuda.empty_cache()
+ csvsave('normal_calibration_coverage.csv',coverage);csvsave('scalar_predictions.csv',scores);save('prediction_freeze.json',{'before_mask_requests':True,'bank_hashes':bankhash,'reproduced_controls_max_error':reproduction,'image_thresholds':tau,'group_thresholds':gtau,'gpu_wall_seconds':gpu_seconds,'peak_cuda_allocated_bytes':peak,'scalar_sha256':hashlib.sha256((OUT/'scalar_predictions.csv').read_bytes()).hexdigest(),'confirmation_access':0,'dense_maps_saved':False})
+ ram.clear();gc.collect();print('PREDICTIONS_FROZEN_BEFORE_MASKS',flush=True)
+ maskmeta={r['path']:r for r in csv.DictReader((OLD/'mask_collection/mask_areas.csv').open()) if r['category']==CAT}
+ maskram=acquire({r['mask_path']:r for r in maskmeta.values()},token,time.perf_counter()+600,'mask')
+ spec=importlib.util.spec_from_file_location('metrics',r'${RESEARCH_WORKSPACE}\industrial_ad_paper_evidence_20260923\run_evidence.py');ev=importlib.util.module_from_spec(spec);spec.loader.exec_module(ev)
+ diagnostics=[]
+ for r in scores:
+  if r['research_role']!='development' or r['path'] not in maskmeta:continue
+  mr=maskmeta[r['path']]
+  with Image.open(io.BytesIO(maskram[mr['mask_path']])) as im:
+   a=np.asarray(im);mode=im.mode
+   if mode in ['RGB','RGBA']:mask=np.any(a[...,:3]>0,axis=-1)
+   elif mode=='LA':mask=a[...,0]>0
+   else:assert a.ndim==2;mask=a>0
+  assert mask.shape==(1024,1024) and int(mask.sum())==int(mr['foreground_pixels'])
+  for method in METHODS:
+   a=maps[r['path']][method];_,pos,neg=ev.counts(mask,mask.shape,a.shape);auc,pauc=ev.weighted_roc(a.ravel(),pos,neg);gt=pos>0
+   diagnostics.append({'category':CAT,'path':r['path'],'group_key':r['group_key'],'method':method,'positive_pixels':int(pos.sum()),'tiny':0<int(pos.sum())<=.001*1024**2,'pixel_auc':auc,'pixel_pauc005_div005':pauc,'image_alarm':r[method]>tau[method],'roi_exceeds_image_tau':bool(a.ravel()[gt].max()>tau[method]) if gt.any() else None,'max_cell_overlaps_mask':bool(gt[int(np.argmax(a))]) if gt.any() else None})
+ csvsave('local_diagnostics.csv',diagnostics);maskram.clear();maps.clear();gc.collect()
+ groups=collections.defaultdict(list)
+ for r in scores:
+  if r['research_role']=='development':groups[r['group_key']].append(r)
+ summaries=[];group_rows=[]
+ for method in METHODS:
+  normal=abnormal=single=fp=tp=supported=singlehits=0
+  for key,rr in groups.items():
+   assert len(rr)==5;visible=[r for r in rr if r['path'] in maskmeta];label=bool(visible);alarm=max(r[method] for r in rr)>gtau[method];hit=any(r[method]>gtau[method] for r in visible)
+   normal+=not label;abnormal+=label;single+=len(visible)==1;fp+=alarm and not label;tp+=alarm and label;supported+=hit;singlehits+=hit and len(visible)==1
+   group_rows.append({'group_key':key,'method':method,'abnormal_views':len(visible),'alarm':int(alarm),'visible_defect_view_alarm':int(hit)})
+  bad=[r for r in scores if r['research_role']=='development' and r['path'] in maskmeta];tiny=[r for r in bad if 0<int(maskmeta[r['path']]['foreground_pixels'])<=.001*1024**2];dd=[r for r in diagnostics if r['method']==method and r['pixel_pauc005_div005'] is not None]
+  summaries.append({'method':method,'normal_groups':normal,'abnormal_groups':abnormal,'single_visible_groups':single,'normal_group_fpr':fp/normal,'supported_group_tpr':supported/abnormal,'abnormal_group_tpr':tp/abnormal,'single_visible_group_tpr':singlehits/single if single else None,'tiny_view_tpr':sum(r[method]>tau[method] for r in tiny)/len(tiny) if tiny else None,'valid_mask_views':len(dd),'mean_pixel_pauc005_div005':float(np.mean([r['pixel_pauc005_div005'] for r in dd]))})
+ csvsave('summary.csv',summaries);csvsave('group_predictions.csv',group_rows)
+ coverage_summary={}
+ for k in METHODS:
+  rr=[r for r in coverage if r['method']==k];coverage_summary[k]={'median_view_mean_squared_nearest':float(np.median([r['mean_squared_nearest'] for r in rr])),'median_view_p95_squared_nearest':float(np.median([r['p95_squared_nearest'] for r in rr])),'group_threshold':gtau[k]}
+ matched=[];risk_by_method={}
+ for k in METHODS:
+  normals=sorted([max(r[k] for r in rr) for rr in groups.values() if not any(r['path'] in maskmeta for r in rr)],reverse=True);risk_by_method[k]={}
+  for allowance in [0,2,4]:
+   cut=normals[allowance];badgroups={key:any(r[k]>cut for r in rr if r['path'] in maskmeta) for key,rr in groups.items() if any(r['path'] in maskmeta for r in rr)};singlegroups={key:badgroups[key] for key,rr in groups.items() if sum(r['path'] in maskmeta for r in rr)==1}
+   matched.append({'method':k,'allowed_normal_false_positive_groups':allowance,'empirical_group_fpr':sum(x>cut for x in normals)/len(normals),'development_normal_threshold':cut,'supported_group_tpr':sum(badgroups.values())/len(badgroups),'single_visible_group_tpr':sum(singlegroups.values())/len(singlegroups),'deployable_calibration':False})
+   if allowance==2:risk_by_method[k]=badgroups
+ csvsave('matched_risk_diagnostic.csv',matched);save('normal_coverage_summary.json',coverage_summary)
+ decisions=[]
+ for candidate,reference,coverage_min,recall_min,local_min in CONTRASTS:
+  aa={r['path']:r for r in diagnostics if r['method']==candidate and r['pixel_pauc005_div005'] is not None};bb={r['path']:r for r in diagnostics if r['method']==reference and r['pixel_pauc005_div005'] is not None};assert set(aa)==set(bb);gp=collections.defaultdict(list)
+  for path in bb:gp[bb[path]['group_key']].append(aa[path]['pixel_pauc005_div005']-bb[path]['pixel_pauc005_div005'])
+  keys=sorted(gp);sums=np.array([sum(gp[k]) for k in keys]);nums=np.array([len(gp[k]) for k in keys]);rng=np.random.default_rng(0);draw=rng.integers(0,len(keys),(5000,len(keys)));localboot=sums[draw].sum(1)/nums[draw].sum(1);localgain=float(sums.sum()/nums.sum());localci=np.quantile(localboot,[.025,.975])
+  keys=sorted(risk_by_method[candidate]);diff=np.array([int(risk_by_method[candidate][k])-int(risk_by_method[reference][k]) for k in keys]);draw=rng.integers(0,len(keys),(5000,len(keys)));recallgain=float(diff.mean());recallci=np.quantile(diff[draw].mean(1),[.025,.975]);reduction=1-coverage_summary[candidate]['median_view_mean_squared_nearest']/coverage_summary[reference]['median_view_mean_squared_nearest']
+  passed=reduction>=coverage_min and localgain>=local_min and localci[0]>0 and recallgain>=recall_min and recallci[0]>0
+  decisions.append({'candidate':candidate,'reference':reference,'normal_cal_median_mean_nn_reduction_fraction':reduction,'paired_mean_npauc_gain':localgain,'local_conditional_group_bootstrap95CI':localci.tolist(),'matched_risk_supported_group_tpr_delta_pp':100*recallgain,'recall_conditional_paired_group_bootstrap95CI_pp':(100*recallci).tolist(),'predeclared_mechanism_gate_pass':bool(passed)})
+ save('result.json',{'status':'SINGLE_CATEGORY_NORMAL_BANK_COVERAGE_COMPLETE','summaries':summaries,'normal_coverage':coverage_summary,'matched_risk':matched,'decisions':decisions,'confirmation_access':0,'payload_saved':False,'innovation_proven':False,'interpretation':'Controlled normal-only construction repair; not novel. Conditional exploratory development diagnostics, no causal architecture or population claims.'});print('BANK_COVERAGE_COMPLETE',flush=True)
+if __name__=='__main__':
+ if '--worker' in sys.argv:
+  try:worker()
+  except Exception as e:
+   save('failure.json',{'status':'STOP_RELOGIN_REQUIRED' if isinstance(e,h.AuthStop) else 'STOP_SANITIZED_FAILURE','error_type':type(e).__name__,'stack':[{'file':pathlib.Path(f.filename).name,'line':f.lineno,'function':f.name} for f in traceback.extract_tb(e.__traceback__)]});print('WORKER_STOP',type(e).__name__,flush=True);sys.exit(1)
+ else:
+  save('code_receipt.json',{'sha256':hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()})
+  try:r=subprocess.run([sys.executable,'-B',__file__,'--worker'],timeout=3500);save('supervisor.json',{'exit_code':r.returncode,'timeout':False})
+  except subprocess.TimeoutExpired:save('supervisor.json',{'status':'HARD_WALL_STOP','timeout':True})

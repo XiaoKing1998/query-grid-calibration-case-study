@@ -1,0 +1,693 @@
+{
+  "primary": {
+    "g_full": {
+      "estimate": 0.07660672369742116,
+      "ci95": [
+        0.06067698175114861,
+        0.09268579408441319
+      ]
+    },
+    "g_11": {
+      "estimate": -0.017826892373081427,
+      "ci95": [
+        -0.0307655916291052,
+        -0.005428372958869904
+      ]
+    },
+    "interaction": {
+      "estimate": 0.09443361607050257,
+      "ci95": [
+        0.07719286517098979,
+        0.11207720834529146
+      ]
+    }
+  },
+  "descriptive_phases": {
+    "00": {
+      "g_phase": {
+        "estimate": 0.005772824262754471,
+        "ci95": [
+          -0.005930652866696186,
+          0.017104353408935576
+        ]
+      },
+      "interaction": {
+        "estimate": 0.07083389943466668,
+        "ci95": [
+          0.053789269014996886,
+          0.0881922648672855
+        ]
+      }
+    },
+    "01": {
+      "g_phase": {
+        "estimate": 0.09999531406859552,
+        "ci95": [
+          0.08220099762866066,
+          0.1178910849114686
+        ]
+      },
+      "interaction": {
+        "estimate": -0.02338859037117436,
+        "ci95": [
+          -0.03713965887333664,
+          -0.0099684143944221
+        ]
+      }
+    },
+    "10": {
+      "g_phase": {
+        "estimate": 0.016969750124329906,
+        "ci95": [
+          0.001207353006060142,
+          0.032398743357641334
+        ]
+      },
+      "interaction": {
+        "estimate": 0.05963697357309126,
+        "ci95": [
+          0.04205430129714027,
+          0.07710931051509438
+        ]
+      }
+    },
+    "11": {
+      "g_phase": {
+        "estimate": -0.017826892373081427,
+        "ci95": [
+          -0.0307655916291052,
+          -0.005428372958869904
+        ]
+      },
+      "interaction": {
+        "estimate": 0.09443361607050257,
+        "ci95": [
+          0.07719286517098979,
+          0.11207720834529146
+        ]
+      }
+    }
+  },
+  "threshold_swap": [
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "full",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 1403.8232421875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 8,
+      "any_detected_abnormal_groups": 74,
+      "supported_detected_abnormal_groups": 57,
+      "normal_group_fpr": 0.18181818181818182,
+      "any_group_tpr": 0.6915887850467289,
+      "supported_group_tpr": 0.5327102803738317
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "full",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 1052.44189453125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 34,
+      "any_detected_abnormal_groups": 107,
+      "supported_detected_abnormal_groups": 102,
+      "normal_group_fpr": 0.7727272727272727,
+      "any_group_tpr": 1.0,
+      "supported_group_tpr": 0.9532710280373832
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "full",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 1403.8232421875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 71,
+      "supported_detected_abnormal_groups": 59,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.6635514018691588,
+      "supported_group_tpr": 0.5514018691588785
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "full",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 1052.44189453125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 8,
+      "any_detected_abnormal_groups": 107,
+      "supported_detected_abnormal_groups": 100,
+      "normal_group_fpr": 0.18181818181818182,
+      "any_group_tpr": 1.0,
+      "supported_group_tpr": 0.9345794392523364
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "full",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1629.67626953125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 1,
+      "any_detected_abnormal_groups": 29,
+      "supported_detected_abnormal_groups": 20,
+      "normal_group_fpr": 0.022727272727272728,
+      "any_group_tpr": 0.27102803738317754,
+      "supported_group_tpr": 0.18691588785046728
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "full",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1209.12890625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 22,
+      "any_detected_abnormal_groups": 102,
+      "supported_detected_abnormal_groups": 87,
+      "normal_group_fpr": 0.5,
+      "any_group_tpr": 0.9532710280373832,
+      "supported_group_tpr": 0.8130841121495327
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "full",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1629.67626953125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 18,
+      "supported_detected_abnormal_groups": 18,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.16822429906542055,
+      "supported_group_tpr": 0.16822429906542055
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "full",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1209.12890625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 1,
+      "any_detected_abnormal_groups": 100,
+      "supported_detected_abnormal_groups": 87,
+      "normal_group_fpr": 0.022727272727272728,
+      "any_group_tpr": 0.9345794392523364,
+      "supported_group_tpr": 0.8130841121495327
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "00",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 977.83154296875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 3,
+      "any_detected_abnormal_groups": 100,
+      "supported_detected_abnormal_groups": 92,
+      "normal_group_fpr": 0.06818181818181818,
+      "any_group_tpr": 0.9345794392523364,
+      "supported_group_tpr": 0.8598130841121495
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "00",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 973.421630859375,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 3,
+      "any_detected_abnormal_groups": 100,
+      "supported_detected_abnormal_groups": 92,
+      "normal_group_fpr": 0.06818181818181818,
+      "any_group_tpr": 0.9345794392523364,
+      "supported_group_tpr": 0.8598130841121495
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "00",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 977.83154296875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 7,
+      "any_detected_abnormal_groups": 104,
+      "supported_detected_abnormal_groups": 96,
+      "normal_group_fpr": 0.1590909090909091,
+      "any_group_tpr": 0.9719626168224299,
+      "supported_group_tpr": 0.897196261682243
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "00",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 973.421630859375,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 7,
+      "any_detected_abnormal_groups": 104,
+      "supported_detected_abnormal_groups": 96,
+      "normal_group_fpr": 0.1590909090909091,
+      "any_group_tpr": 0.9719626168224299,
+      "supported_group_tpr": 0.897196261682243
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "00",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1075.29248046875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 2,
+      "any_detected_abnormal_groups": 90,
+      "supported_detected_abnormal_groups": 80,
+      "normal_group_fpr": 0.045454545454545456,
+      "any_group_tpr": 0.8411214953271028,
+      "supported_group_tpr": 0.7476635514018691
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "00",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1171.8291015625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 81,
+      "supported_detected_abnormal_groups": 69,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.7570093457943925,
+      "supported_group_tpr": 0.6448598130841121
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "00",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1075.29248046875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 97,
+      "supported_detected_abnormal_groups": 88,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.9065420560747663,
+      "supported_group_tpr": 0.822429906542056
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "00",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1171.8291015625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 79,
+      "supported_detected_abnormal_groups": 69,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.7383177570093458,
+      "supported_group_tpr": 0.6448598130841121
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "01",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 1395.209716796875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 6,
+      "any_detected_abnormal_groups": 47,
+      "supported_detected_abnormal_groups": 43,
+      "normal_group_fpr": 0.13636363636363635,
+      "any_group_tpr": 0.4392523364485981,
+      "supported_group_tpr": 0.40186915887850466
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "01",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 1004.85400390625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 31,
+      "any_detected_abnormal_groups": 107,
+      "supported_detected_abnormal_groups": 93,
+      "normal_group_fpr": 0.7045454545454546,
+      "any_group_tpr": 1.0,
+      "supported_group_tpr": 0.8691588785046729
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "01",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 1395.209716796875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 52,
+      "supported_detected_abnormal_groups": 45,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.48598130841121495,
+      "supported_group_tpr": 0.4205607476635514
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "01",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 1004.85400390625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 9,
+      "any_detected_abnormal_groups": 107,
+      "supported_detected_abnormal_groups": 96,
+      "normal_group_fpr": 0.20454545454545456,
+      "any_group_tpr": 1.0,
+      "supported_group_tpr": 0.897196261682243
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "01",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1571.7978515625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 1,
+      "any_detected_abnormal_groups": 16,
+      "supported_detected_abnormal_groups": 15,
+      "normal_group_fpr": 0.022727272727272728,
+      "any_group_tpr": 0.14953271028037382,
+      "supported_group_tpr": 0.14018691588785046
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "01",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1182.26416015625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 18,
+      "any_detected_abnormal_groups": 99,
+      "supported_detected_abnormal_groups": 82,
+      "normal_group_fpr": 0.4090909090909091,
+      "any_group_tpr": 0.9252336448598131,
+      "supported_group_tpr": 0.7663551401869159
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "01",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1571.7978515625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 18,
+      "supported_detected_abnormal_groups": 18,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.16822429906542055,
+      "supported_group_tpr": 0.16822429906542055
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "01",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1182.26416015625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 99,
+      "supported_detected_abnormal_groups": 81,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.9252336448598131,
+      "supported_group_tpr": 0.7570093457943925
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "10",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 1064.642822265625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 9,
+      "any_detected_abnormal_groups": 96,
+      "supported_detected_abnormal_groups": 74,
+      "normal_group_fpr": 0.20454545454545456,
+      "any_group_tpr": 0.897196261682243,
+      "supported_group_tpr": 0.6915887850467289
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "10",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 968.806884765625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 16,
+      "any_detected_abnormal_groups": 103,
+      "supported_detected_abnormal_groups": 87,
+      "normal_group_fpr": 0.36363636363636365,
+      "any_group_tpr": 0.9626168224299065,
+      "supported_group_tpr": 0.8130841121495327
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "10",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 1064.642822265625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 2,
+      "any_detected_abnormal_groups": 82,
+      "supported_detected_abnormal_groups": 77,
+      "normal_group_fpr": 0.045454545454545456,
+      "any_group_tpr": 0.7663551401869159,
+      "supported_group_tpr": 0.719626168224299
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "10",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 968.806884765625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 7,
+      "any_detected_abnormal_groups": 95,
+      "supported_detected_abnormal_groups": 86,
+      "normal_group_fpr": 0.1590909090909091,
+      "any_group_tpr": 0.8878504672897196,
+      "supported_group_tpr": 0.8037383177570093
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "10",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1522.7080078125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 1,
+      "any_detected_abnormal_groups": 42,
+      "supported_detected_abnormal_groups": 28,
+      "normal_group_fpr": 0.022727272727272728,
+      "any_group_tpr": 0.3925233644859813,
+      "supported_group_tpr": 0.2616822429906542
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "10",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1209.12890625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 7,
+      "any_detected_abnormal_groups": 84,
+      "supported_detected_abnormal_groups": 62,
+      "normal_group_fpr": 0.1590909090909091,
+      "any_group_tpr": 0.7850467289719626,
+      "supported_group_tpr": 0.5794392523364486
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "10",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1522.7080078125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 21,
+      "supported_detected_abnormal_groups": 19,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.19626168224299065,
+      "supported_group_tpr": 0.17757009345794392
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "10",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1209.12890625,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 0,
+      "any_detected_abnormal_groups": 59,
+      "supported_detected_abnormal_groups": 55,
+      "normal_group_fpr": 0.0,
+      "any_group_tpr": 0.5514018691588785,
+      "supported_group_tpr": 0.514018691588785
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "11",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 990.17529296875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 8,
+      "any_detected_abnormal_groups": 98,
+      "supported_detected_abnormal_groups": 85,
+      "normal_group_fpr": 0.18181818181818182,
+      "any_group_tpr": 0.9158878504672897,
+      "supported_group_tpr": 0.794392523364486
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "11",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 968.314453125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 9,
+      "any_detected_abnormal_groups": 100,
+      "supported_detected_abnormal_groups": 86,
+      "normal_group_fpr": 0.20454545454545456,
+      "any_group_tpr": 0.9345794392523364,
+      "supported_group_tpr": 0.8037383177570093
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "11",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "image",
+      "threshold": 990.17529296875,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 8,
+      "any_detected_abnormal_groups": 94,
+      "supported_detected_abnormal_groups": 88,
+      "normal_group_fpr": 0.18181818181818182,
+      "any_group_tpr": 0.8785046728971962,
+      "supported_group_tpr": 0.822429906542056
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "11",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "image",
+      "threshold": 968.314453125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 9,
+      "any_detected_abnormal_groups": 95,
+      "supported_detected_abnormal_groups": 89,
+      "normal_group_fpr": 0.20454545454545456,
+      "any_group_tpr": 0.8878504672897196,
+      "supported_group_tpr": 0.8317757009345794
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "11",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1094.30517578125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 2,
+      "any_detected_abnormal_groups": 81,
+      "supported_detected_abnormal_groups": 73,
+      "normal_group_fpr": 0.045454545454545456,
+      "any_group_tpr": 0.7570093457943925,
+      "supported_group_tpr": 0.6822429906542056
+    },
+    {
+      "score_bank": "dino_odd_own",
+      "readout": "11",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1129.066162109375,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 1,
+      "any_detected_abnormal_groups": 78,
+      "supported_detected_abnormal_groups": 70,
+      "normal_group_fpr": 0.022727272727272728,
+      "any_group_tpr": 0.7289719626168224,
+      "supported_group_tpr": 0.6542056074766355
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "11",
+      "threshold_bank": "dino_odd_own",
+      "threshold_unit": "group",
+      "threshold": 1094.30517578125,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 2,
+      "any_detected_abnormal_groups": 76,
+      "supported_detected_abnormal_groups": 68,
+      "normal_group_fpr": 0.045454545454545456,
+      "any_group_tpr": 0.7102803738317757,
+      "supported_group_tpr": 0.6355140186915887
+    },
+    {
+      "score_bank": "dino_balanced_own",
+      "readout": "11",
+      "threshold_bank": "dino_balanced_own",
+      "threshold_unit": "group",
+      "threshold": 1129.066162109375,
+      "normal_groups": 44,
+      "abnormal_groups": 107,
+      "normal_false_positive_groups": 1,
+      "any_detected_abnormal_groups": 67,
+      "supported_detected_abnormal_groups": 61,
+      "normal_group_fpr": 0.022727272727272728,
+      "any_group_tpr": 0.6261682242990654,
+      "supported_group_tpr": 0.5700934579439252
+    }
+  ]
+}

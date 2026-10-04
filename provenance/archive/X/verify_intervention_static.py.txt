@@ -1,0 +1,46 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Independent source-only reconstruction of the frozen deletion sets."""
+from pathlib import Path
+import csv
+import collections
+import hashlib
+import json
+
+OUT = Path(__file__).parent
+UP = Path('${RESEARCH_WORKSPACE}/innovation_loop_20261003_session01/bank_coverage_attempt01')
+OLD = Path('${PROJECT_ROOT}/artifacts/ram_ad_20260918/realiad_static_development/attempt02/results/plastic_nut')
+def rows(path):
+    with path.open(newline='',encoding='utf-8-sig') as f:
+        return list(csv.DictReader(f))
+inputs = {r['path']:r for r in rows(OLD/'inputs.csv') if r['research_role']=='source_fit'}
+bank = [r for r in rows(UP/'new_bank_source_identities.csv') if r['method']=='dino_balanced_own']
+assert len(bank)==4096
+def stratum(r):
+    return (inputs[r['path']]['camera'],int(r['row'])%2,int(r['col'])%2)
+edge = [r for r in bank if int(r['row'])==0 or int(r['col'])==0]
+interior = [r for r in bank if 1<=int(r['row'])<=62 and 1<=int(r['col'])<=62]
+counts = collections.Counter(map(stratum,edge))
+selected=[]
+strata=[]
+for key,n in sorted(counts.items()):
+    eligible=[r for r in interior if stratum(r)==key]
+    assert len(eligible)>=n
+    chosen=sorted(eligible,key=lambda r:hashlib.sha256(('spatial-sham-v1:'+r['prototype']+':'+r['path']).encode()).hexdigest())[:n]
+    selected+=chosen
+    strata.append({'camera':key[0],'row_parity':key[1],'col_parity':key[2],
+                   'target_n':n,'eligible_interior_n':len(eligible),'sham_n':len(chosen)})
+target=sorted(int(r['prototype']) for r in edge)
+sham=sorted(int(r['prototype']) for r in selected)
+assert len(target)==len(sham)==92 and not set(target)&set(sham)
+assert collections.Counter(map(stratum,edge))==collections.Counter(map(stratum,selected))
+result={'status':'PASS_SOURCE_METADATA_ONLY','target_ids':target,'sham_ids':sham,'strata':strata,
+        'remaining_rows_each':4004,
+        'target_source_groups':len({inputs[r['path']]['group_key'] for r in edge}),
+        'sham_source_groups':len({inputs[r['path']]['group_key'] for r in selected}),
+        'matched_properties':['count','camera','parity'],
+        'unmatched_properties':['source_image','source_group','feature_distance','query_usage'],
+        'pixels_read':0,'credentials_read':False,'gpu_seconds':0}
+(OUT/'independent_intervention_static.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
+print(json.dumps({k:result[k] for k in ['status','remaining_rows_each','target_source_groups','sham_source_groups']}))

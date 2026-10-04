@@ -1,0 +1,133 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""Thin AD2 adapter around pinned author embedding and coreset code."""
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import sys
+import time
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE / 'runtime_deps'))
+sys.path.insert(0, str(HERE / 'vendor/patchcore-inspection/src'))
+
+import numpy as np
+import torch
+import torchvision
+from PIL import Image
+from torchvision import transforms
+import patchcore.patchcore
+import patchcore.sampler
+
+CATS = ('can', 'fabric', 'fruit_jelly', 'rice', 'sheet_metal', 'vial', 'wallplugs', 'walnuts')
+DATA = Path('${AD2_DATA_ROOT}')
+COMMIT = 'fcaa92f124fb1ad74a7acf56726decd4b27cbcad'
+
+
+def sha(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for data in iter(lambda: stream.read(8 * 1024**2), b''):
+            digest.update(data)
+    return digest.hexdigest()
+
+
+def write_json(path, obj):
+    Path(path).write_text(json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False), encoding='utf-8')
+
+
+def configure():
+    torch.set_num_threads(4)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+    torch.backends.cudnn.benchmark = False
+    torch.set_float32_matmul_precision('highest')
+    np.random.seed(0)
+    torch.manual_seed(0)
+
+
+def make_model():
+    backbone = torchvision.models.wide_resnet50_2(weights='IMAGENET1K_V1').eval().requires_grad_(False)
+    # The upstream dimension probe must not mutate BatchNorm running buffers.
+    before = {k: v.detach().clone() for k, v in backbone.named_buffers()}
+    model = patchcore.patchcore.PatchCore(torch.device('cuda'))
+    model.load(backbone, ['layer2', 'layer3'], torch.device('cuda'), (3, 224, 224), 1024, 1024,
+               patchsize=3, anomaly_score_num_nn=1)
+    model.eval().requires_grad_(False)
+    assert all(torch.equal(v.cpu(), before[k].cpu()) for k, v in backbone.named_buffers())
+    return model, before
+
+
+NORMALIZE = transforms.Normalize([.485, .456, .406], [.229, .224, .225])
+REFERENCE = transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224),
+                                transforms.ToTensor(), NORMALIZE])
+
+
+def image_tensor(path, profile):
+    with Image.open(path) as im:
+        im = im.convert('RGB')
+        if profile == 'reference224':
+            return REFERENCE(im)
+        width, height = im.size
+        scale = 448 / max(width, height)
+        size = (max(16, round(width * scale / 16) * 16), max(16, round(height * scale / 16) * 16))
+        im = im.resize(size, Image.Resampling.BILINEAR)
+        return NORMALIZE(transforms.functional.to_tensor(im))
+
+
+@torch.no_grad()
+def embed(model, tensors):
+    result, shapes = model._embed(tensors.cuda(), detach=False, provide_patch_shapes=True)
+    grid = tuple(shapes[0])
+    return result.reshape(len(tensors), int(np.prod(grid)), 1024).detach().cpu().numpy(), grid
+
+
+@torch.no_grad()
+def nearest_squared(query, bank, chunk=256):
+    """Exact exhaustive FP32 L2, with the same squared convention as IndexFlatL2."""
+    bank_norm = (bank * bank).sum(1)
+    out = []
+    for q in torch.from_numpy(np.ascontiguousarray(query)).cuda().split(chunk):
+        d = (q * q).sum(1, keepdim=True) + bank_norm[None] - 2 * (q @ bank.T)
+        out.append(d.clamp_min_(0).min(1).values.cpu().numpy())
+    return np.concatenate(out)
+
+
+def calibrate(scores):
+    rank = math.ceil((len(scores) + 1) * .95)
+    return float(np.sort(scores)[rank - 1]) if rank <= len(scores) else float('inf')
+
+
+class RecordingSampler(patchcore.sampler.ApproximateGreedyCoresetSampler):
+    """Capture indices without changing upstream selection or arithmetic."""
+    deadline = float('inf')
+
+    def _compute_batchwise_differences(self, matrix_a, matrix_b):
+        if time.perf_counter() > self.deadline:
+            raise RuntimeError('Sampler resource deadline reached')
+        return super()._compute_batchwise_differences(matrix_a, matrix_b)
+
+    def _compute_greedy_coreset_indices(self, features):
+        self.indices = super()._compute_greedy_coreset_indices(features)
+        return self.indices
+
+
+def select_bank(pool, profile, method, deadline=float('inf')):
+    np.random.seed(0)
+    torch.manual_seed(0)
+    if method.endswith('random4096'):
+        ids = np.random.choice(len(pool), 4096, replace=False)
+        return pool[ids].copy(), ids
+    fraction = .1 if profile == 'reference224' else (4096 + .5) / len(pool)
+    sampler = RecordingSampler(fraction, torch.device('cuda'))
+    sampler.deadline = deadline
+    with torch.no_grad():
+        bank = sampler.run(pool)
+    expected = int(len(pool) * .1) if profile == 'reference224' else 4096
+    assert len(bank) == expected
+    return np.asarray(bank), sampler.indices

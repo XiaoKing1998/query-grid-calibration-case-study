@@ -1,0 +1,306 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""CPU analysis of frozen original-bank query-phase maxima; no inference imports."""
+from pathlib import Path
+from collections import defaultdict, Counter
+import csv
+import ctypes
+import hashlib
+import json
+import math
+import sys
+import time
+import traceback
+import zipfile
+import numpy as np
+
+OUT=Path(__file__).resolve().parent
+X=OUT.parent/'spatial_support_attempt01'
+B=Path('${RESEARCH_WORKSPACE}/innovation_loop_20261003_session01/bank_coverage_attempt01')
+REPO=Path('${PROJECT_ROOT}')
+ZIP=REPO/'artifacts/ram_ad_20260918/realiad_metadata_admission/realiad_jsons.zip'
+BANKS=('dino_odd_own','dino_balanced_own')
+READOUTS=('full','00','01','10','11')
+FIELDS=('category','path','group_key','camera','research_role')
+CHECKS=[]
+START=time.perf_counter()
+CPU_START=time.process_time()
+
+
+def sha(path):
+    d=hashlib.sha256()
+    with path.open('rb') as f:
+        for block in iter(lambda:f.read(8*1024**2),b''):d.update(block)
+    return d.hexdigest()
+
+
+def read(path):
+    return json.loads(path.read_text(encoding='utf-8-sig'))
+
+
+def readcsv(path):
+    with path.open(encoding='utf-8-sig',newline='') as f:return list(csv.DictReader(f))
+
+
+def write(name,value):
+    with (OUT/name).open('x',encoding='utf8',newline='\n') as f:
+        f.write(json.dumps(value,indent=2,ensure_ascii=False,allow_nan=False)+'\n')
+
+
+def writecsv(name,records):
+    with (OUT/name).open('x',encoding='utf8',newline='') as f:
+        w=csv.DictWriter(f,fieldnames=list(records[0]));w.writeheader();w.writerows(records)
+
+
+def check(name,value):
+    CHECKS.append({'name':name,'passed':bool(value)})
+    assert value,name
+
+
+def memory():
+    class Counters(ctypes.Structure):
+        _fields_=[('cb',ctypes.c_ulong),('PageFaultCount',ctypes.c_ulong),
+                  ('PeakWorkingSetSize',ctypes.c_size_t),('WorkingSetSize',ctypes.c_size_t),
+                  ('QuotaPeakPagedPoolUsage',ctypes.c_size_t),('QuotaPagedPoolUsage',ctypes.c_size_t),
+                  ('QuotaPeakNonPagedPoolUsage',ctypes.c_size_t),('QuotaNonPagedPoolUsage',ctypes.c_size_t),
+                  ('PagefileUsage',ctypes.c_size_t),('PeakPagefileUsage',ctypes.c_size_t)]
+    kernel=ctypes.WinDLL('kernel32');kernel.GetCurrentProcess.restype=ctypes.c_void_p
+    psapi=ctypes.WinDLL('psapi');psapi.GetProcessMemoryInfo.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_ulong]
+    c=Counters();c.cb=ctypes.sizeof(c)
+    assert psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(),ctypes.byref(c),c.cb)
+    return {'rss_bytes':int(c.WorkingSetSize),'process_peak_rss_bytes':int(c.PeakWorkingSetSize)}
+
+
+def guard(plan):
+    m=memory()
+    assert time.perf_counter()-START<=plan['resources']['cpu_wall_seconds']
+    assert m['process_peak_rss_bytes']<=plan['resources']['rss_bytes']
+    assert sum(p.stat().st_size for p in OUT.rglob('*') if p.is_file())<=plan['resources']['output_bytes_limit']
+    return m
+
+
+def evaluate(scorebank,readout,thresholdbank,unit,threshold,groups,values,labels):
+    records=[]
+    for group,items in sorted(groups.items()):
+        anomaly=any(labels[r['path']] for r in items)
+        any_alarm=any(values[(scorebank,readout,r['path'])]>threshold for r in items)
+        supported=any(values[(scorebank,readout,r['path'])]>threshold for r in items if labels[r['path']])
+        records.append({'score_bank':scorebank,'readout':readout,'threshold_bank':thresholdbank,
+                        'threshold_unit':unit,'threshold':threshold,'group_key':group,'is_anomaly':int(anomaly),
+                        'any_alarm':int(any_alarm),'supported_alarm':int(supported)})
+    normal=[r for r in records if not r['is_anomaly']]
+    abnormal=[r for r in records if r['is_anomaly']]
+    fp=sum(r['any_alarm'] for r in normal);anytp=sum(r['any_alarm'] for r in abnormal)
+    support=sum(r['supported_alarm'] for r in abnormal)
+    summary={'score_bank':scorebank,'readout':readout,'threshold_bank':thresholdbank,
+             'threshold_unit':unit,'threshold':threshold,'normal_groups':len(normal),'abnormal_groups':len(abnormal),
+             'normal_false_positive_groups':fp,'any_detected_abnormal_groups':anytp,
+             'supported_detected_abnormal_groups':support,'normal_group_fpr':fp/len(normal),
+             'any_group_tpr':anytp/len(abnormal),'supported_group_tpr':support/len(abnormal)}
+    return summary,records
+
+
+def main():
+    assert not any((OUT/n).exists() for n in ('result.json','failure.json','admission.json','resource_receipt.json'))
+    plan=read(OUT/'plan.json')
+    check('plan_status',plan['status']=='FROZEN_BEFORE_READING_NEW_PARITY_DERIVED_VALUES')
+    check('planned_scope',plan['banks']==list(BANKS) and plan['readouts']==list(READOUTS))
+    freeze=read(X/'prediction_freeze.json');final=read(X/'final_analysis_status.json')
+    check('upstream_success',freeze['status']==plan['bindings']['freeze_status'] and
+          final['status']==plan['bindings']['final_analysis_status'] and final['checks_failed']==0 and
+          read(X/'supervisor.json')=={'exit_code':0,'timeout':False})
+    check('upstream_result_link',sha(X/final['canonical_result'])==final['result_sha256'])
+    check('upstream_analysis_link',sha(X/'analyze_spatial.py')==final['analysis_sha256'])
+    for name in ('spatial_statistics.csv','scalar_predictions.csv'):
+        check('bound_'+name,sha(X/name)==plan['bindings'][name]==freeze['sha256_files'][name])
+    check('upstream_original_controls_exact',all(freeze['reproduced_controls_max_error'][k]==0 for k in BANKS))
+    prior=read(B/'prediction_freeze.json')
+    check('prior_scalar_link',sha(B/'scalar_predictions.csv')==prior['scalar_sha256'])
+    check('original_bank_hashes',all(freeze['bank_hashes'][k]==prior['bank_hashes'][k] for k in BANKS))
+    identities=read(X/'intervention_identities.json')['original_bank_identities']
+    check('original_bank_sizes',all(len(identities[k])==4096 and {r['prototype'] for r in identities[k]}==set(range(4096)) for k in BANKS))
+    check('odd_bank_parity11',all(r['row']%2==r['col']%2==1 for r in identities[BANKS[0]]))
+    inputs=[OUT/'plan.json',OUT/'run_analysis.py',X/'prediction_freeze.json',X/'final_analysis_status.json',
+            X/'supervisor.json',X/'spatial_statistics.csv',X/'scalar_predictions.csv',X/'analysis_group_predictions.csv',
+            X/final['canonical_result'],X/'analyze_spatial.py',X/'intervention_identities.json',
+            B/'prediction_freeze.json',B/'scalar_predictions.csv',ZIP]
+    hashes={str(p):sha(p) for p in inputs}
+    scalar=readcsv(X/'scalar_predictions.csv')
+    old={r['path']:r for r in readcsv(B/'scalar_predictions.csv')}
+    check('query_unique_counts',len(scalar)==len({r['path'] for r in scalar})==1135)
+    metadata={r['path']:r for r in scalar}
+    check('roles',dict(Counter(r['research_role'] for r in scalar))==plan['roles'])
+    check('prior_metadata',set(old)==set(metadata) and all(all(r[k]==old[r['path']][k] for k in FIELDS) for r in scalar))
+    cal=defaultdict(list);dev=defaultdict(list)
+    for r in scalar:
+        (cal if r['research_role']=='source_calibration' else dev)[r['group_key']].append(r)
+    check('groups',len(cal)==76 and len(dev)==151 and not set(cal)&set(dev))
+    check('five_cameras',all(len(v)==5 and sorted(r['camera'] for r in v)==['1','2','3','4','5'] for v in [*cal.values(),*dev.values()]))
+    spatial=[r for r in readcsv(X/'spatial_statistics.csv') if r['method'] in BANKS]
+    check('original_spatial_unique',len(spatial)==len({(r['method'],r['path']) for r in spatial})==2270)
+    values={};spatial_index={}
+    for r in spatial:
+        check('spatial_identity_'+r['method']+'_'+r['path'],r['path'] in metadata and all(r[k]==metadata[r['path']][k] for k in FIELDS))
+        method=r['method'];path=r['path'];full=float(r['max'])
+        phases=[float(r['parity'+phase+'_max']) for phase in READOUTS[1:]]
+        check('phase_identity_'+method+'_'+path,all(math.isfinite(v) and v>0 for v in [full,*phases]) and max(phases)==full and all(v<=full for v in phases))
+        check('full_exact_'+method+'_'+path,full==float(metadata[path][method])==float(old[path][method]))
+        spatial_index[(method,path)]=r
+        for readout,value in zip(READOUTS,[full,*phases]):values[(method,readout,path)]=value
+    guard(plan)
+    # Official metadata is parsed once and immediately filtered to the frozen1135path whitelist.
+    with zipfile.ZipFile(ZIP) as z:official=json.loads(z.read('realiad_jsons/plastic_nut.json'))
+    prefix=official['meta']['prefix'].rstrip('/')
+    labels={}
+    for split in ('train','test'):
+        for r in official[split]:
+            path=prefix+'/'+r['image_path'].lstrip('/')
+            if path in metadata:
+                labels[path]=int(r['anomaly_class']!='OK')
+                expected='train' if metadata[path]['research_role']=='source_calibration' else 'test'
+                check('official_split_'+path,split==expected)
+    del official
+    check('official_label_whitelist',set(labels)==set(metadata) and all(labels[r['path']]==0 for group in cal.values() for r in group))
+    grouplabel={g:int(any(labels[r['path']] for r in items)) for g,items in dev.items()}
+    check('development_class_counts',sum(grouplabel.values())==107 and len(dev)-sum(grouplabel.values())==44)
+    saved_groups=readcsv(X/'analysis_group_predictions.csv')
+    observed=defaultdict(set)
+    for r in saved_groups:
+        assert r['is_anomaly'] in ('True','False','1','0')
+        observed[r['group_key']].add(int(r['is_anomaly'] in ('True','1')))
+    check('prior_group_labels_consistent',set(observed)==set(dev) and all(v=={grouplabel[g]} for g,v in observed.items()))
+    group_rows=[];view_rows=[]
+    for group,items in sorted(cal.items()):
+        entry={'group_key':group,'views':5}
+        local=[]
+        for r in sorted(items,key=lambda r:int(r['camera'])):
+            v={k:r[k] for k in FIELDS}
+            for phase in READOUTS:
+                v['g_'+phase]=float(np.log(values[(BANKS[0],phase,r['path'])]/values[(BANKS[1],phase,r['path'])]))
+            for phase in READOUTS[1:]:v['interaction_'+phase]=v['g_full']-v['g_'+phase]
+            local.append(v);view_rows.append(v)
+        for key in ['g_'+p for p in READOUTS]+['interaction_'+p for p in READOUTS[1:]]:
+            entry[key]=float(np.mean([v[key] for v in local]))
+        group_rows.append(entry)
+    rng=np.random.Generator(np.random.PCG64(20261013))
+    draw=rng.integers(0,76,size=(5000,76))
+    def endpoint(key, subset=None):
+        a=np.array([r[key] for r in group_rows]) if subset is None else np.array(subset)
+        ci=np.quantile(a[draw].mean(1),[.025,.975])
+        return {'estimate':float(a.mean()),'ci95':[float(x) for x in ci]}
+    endpoints={k:endpoint(k) for k in ['g_'+p for p in READOUTS]+['interaction_'+p for p in READOUTS[1:]]}
+    primary={'g_full':endpoints['g_full'],'g_11':endpoints['g_11'],'interaction':endpoints['interaction_11']}
+    descriptive={phase:{'g_phase':endpoints['g_'+phase],'interaction':endpoints['interaction_'+phase]} for phase in READOUTS[1:]}
+    thresholds={};threshold_rows=[]
+    for bank in BANKS:
+        for readout in READOUTS:
+            for unit in ('image','group'):
+                a=([values[(bank,readout,r['path'])] for items in cal.values() for r in items] if unit=='image'
+                   else [max(values[(bank,readout,r['path'])] for r in items) for items in cal.values()])
+                rank=math.ceil(.95*(len(a)+1));tau=float(np.sort(a)[rank-1])
+                thresholds[(bank,readout,unit)]=tau
+                threshold_rows.append({'bank':bank,'readout':readout,'calibration_unit':unit,'n':len(a),'rank':rank,'threshold':tau})
+                if readout=='full':
+                    check('prior_full_threshold_'+bank+'_'+unit,tau==prior['image_thresholds' if unit=='image' else 'group_thresholds'][bank])
+    secondary=[];swaps=[];group_predictions=[]
+    for readout in READOUTS:
+        for unit in ('image','group'):
+            for scorebank in BANKS:
+                for thresholdbank in BANKS:
+                    summary,records=evaluate(scorebank,readout,thresholdbank,unit,thresholds[(thresholdbank,readout,unit)],dev,values,labels)
+                    swaps.append(summary);group_predictions.extend(records)
+                    if scorebank==thresholdbank:secondary.append(summary.copy())
+    check('operating_table_counts',len(secondary)==20 and len(swaps)==40 and len(group_predictions)==6040)
+    check('self_diagonal',secondary==[r for r in swaps if r['score_bank']==r['threshold_bank']])
+    peaks=[]
+    for bank in BANKS:
+        for readout in READOUTS:
+            for role in ('source_calibration','development'):
+                items=[r for r in spatial if r['method']==bank and r['research_role']==role]
+                prefix='' if readout=='full' else 'parity'+readout+'_'
+                coords=[(int(r[prefix+'argmax_row']),int(r[prefix+'argmax_col'])) for r in items]
+                ties=[int(r['image_max_tie_count' if readout=='full' else prefix+'max_tie_count']) for r in items]
+                n=len(items);ring=sum(y in (0,63) or x in (0,63) for y,x in coords)
+                peaks.append({'bank':bank,'readout':readout,'research_role':role,'n':n,'readout_cells':plan['readout_cells'][readout],
+                              'representative_outer_ring_peaks':ring,'representative_outer_ring_fraction':ring/n,
+                              'representative_top_left_peaks':sum(y==0 or x==0 for y,x in coords),
+                              'representative_bottom_right_peaks':sum(y==63 or x==63 for y,x in coords),
+                              'images_with_max_ties':sum(t>1 for t in ties),'total_max_tie_cells':sum(ties),
+                              'boundary_sides':'all' if readout=='full' else {'00':'top,left','01':'top,right','10':'bottom,left','11':'bottom,right'}[readout]})
+    bycamera=[]
+    for camera in ('1','2','3','4','5'):
+        rr=[r for r in view_rows if r['camera']==camera]
+        bycamera.append({'camera':camera,'n':len(rr),'g_full_mean':float(np.mean([r['g_full'] for r in rr])),
+                         'g_11_mean':float(np.mean([r['g_11'] for r in rr])),
+                         'interaction_mean':float(np.mean([r['interaction_11'] for r in rr]))})
+    gate=primary['interaction']['ci95'][0]>0
+    admission={'status':'PASS_FROZEN_METADATA_AND_SCALAR_ADMISSION','input_hashes':hashes,
+               'checks':CHECKS,'check_count':len(CHECKS),'failed_checks':sum(not r['passed'] for r in CHECKS),
+               'role_counts':plan['roles'],'normal_calibration_groups':76,'development_normal_groups':44,
+               'development_abnormal_groups':107,'development_abnormal_views':sum(labels[r['path']] for group in dev.values() for r in group),
+               'official_labels_scope':'Only1135frozenquerypaths retained; mask pixels and confirmation pixels/scores were not accessed.'}
+    result={'status':'PASS_EXPLORATORY_QUERY_SUPPORT_ANALYSIS','primary':primary,'descriptive_phases':descriptive,
+            'diagnostic_gate_pass':gate,'innovation_proven':False,'normal_views':380,'normal_groups':76,
+            'bootstrap':{'generator':'PCG64','seed':20261013,'replicates':5000,'draw_shape':[5000,76],
+                         'draw_sha256_int64_c':hashlib.sha256(draw.astype(np.int64).tobytes()).hexdigest(),
+                         'unit':'five-camera acquisition group','ci':'conditional percentile95%; no simultaneous/multiplicity guarantee'},
+            'secondary':secondary,'threshold_swap':swaps,'per_camera_primary':bycamera,
+            'phase_boundaries':'Every phase has1024cells,63outer-ring cells,961interior cells, but different edge sides. First-index peaks may be tied.',
+            'interpretation':'Positive interaction means common-parity readout reduces the normal-bank score gap conditional on these banks. It does not establish elimination, complete cause, positional mechanism, defect localization or innovation.',
+            'history':'Loop2 parity peak counts and previous bank effects were already observed; this is sequential exploration.',
+            'access':{'new_pixels':0,'masks':0,'network':0,'gpu':0,'confirmation_pixels_or_scores':0,'producer_import':False},
+            'plan_sha256':sha(OUT/'plan.json'),'producer_sha256':sha(Path(__file__))}
+    guard(plan)
+    write('admission.json',admission)
+    writecsv('primary_groups.csv',group_rows);writecsv('normal_view_contrasts.csv',view_rows)
+    writecsv('thresholds.csv',threshold_rows);writecsv('secondary.csv',secondary);writecsv('threshold_swap.csv',swaps)
+    writecsv('group_predictions.csv',group_predictions);writecsv('phase_peak_statistics.csv',peaks)
+    write('result.json',result)
+    report=['# Loop3：两原库的查询相位支撑诊断','',
+      '## 判定','',
+      '主诊断门'+('通过' if gate else '未通过')+'；未认定创新。仅使用两原始4096原型库，未分析删除库。',
+      '此前已见Loop2正常峰值相位计数，属于有历史观察的探索性计划，不是全盲预注册。','',
+      '## 正常校准主端点','',
+      '380正常校准视图先在五camera组内均值，再取76组均值。g=log(odd/balanced)，interaction=g_full−g_11；5000次PCG64(seed20261013)配对组bootstrap，全部端点共用抽样。','',
+      '| 端点 | 估计 | 条件95%区间 |','|---|---:|---|']
+    for key,e in primary.items():report.append(f"| {key} | {e['estimate']:.9f} | [{e['ci95'][0]:.9f}, {e['ci95'][1]:.9f}] |")
+    report+=['','正interaction只支持限制到共同parity11查询点后正常分数差减小；不能据此称差异完全消除，也不能解释为已识别位置编码或完整因果机制。','',
+      '## 全部相位描述对照','', '| 查询相位 | g_phase | g_phase条件95%区间 | full−phase | full−phase条件95%区间 |',
+      '|---|---:|---|---:|---|']
+    for phase,d in descriptive.items():
+        a=d['g_phase'];b=d['interaction']
+        report.append(f"| {phase} | {a['estimate']:.9f} | [{a['ci95'][0]:.9f},{a['ci95'][1]:.9f}] | {b['estimate']:.9f} | [{b['ci95'][0]:.9f},{b['ci95'][1]:.9f}] |")
+    report+=['','未从相位中挑选最优结果或补加成功门。各相位都含1024格、63个外环格；00含上/左边，01上/右，10下/左，11下/右，均不是纯内部相位。',
+      'phase_peak_statistics.csv保存校准/开发的代表峰边界比例及并列数。first-index代表峰不能假设唯一。','',
+      '## 源阈值工作点与置换诊断','',
+      '每个bank/readout独立用380cal图取第362顺序统计量，用76组最大值取第74顺序统计量；均严格score>tau。开发44正常组、107异常组，支持性TPR要求官方异常视图越阈，不是空间mask支持。','',
+      '| bank / readout | 阈值单位 | FPR | any TPR | supported TPR |', '|---|---|---:|---:|---:|']
+    for r in secondary:
+        report.append(f"| {r['score_bank']} / {r['readout']} | {r['threshold_unit']} | {100*r['normal_group_fpr']:.4f}% | {100*r['any_group_tpr']:.4f}% | {100*r['supported_group_tpr']:.4f}% |")
+    report+=['','threshold_swap.csv完整列出各readout、两种阈值单位的2×2分数库/阈值库组合，共40行；对角项逐项等于20行self工作点。跨库阈值仅为数值诊断，不代表可部署校准或由开发标签选阈值。','',
+      '## 完整性与局限','',
+      f"{len(CHECKS)}项检查通过；两原库哈希一致，全部1135full分数与X及旧coverage保存值精确一致，所有query满足max(四相位)=full及phase≤full。官方标签限于冻结1135路径，开发组标签与X全部条件一致。", 
+      '全部为重复开发、单类、固定库条件下的证据；无独立确认、无多重比较校正，不将支持视图率写成缺陷定位。原银行构造联合门仍未通过；本轮正诊断不能改变其历史结论。','',
+      '实际命令：','', '```powershell',
+      "& '${RESOURCE_DISK_ROOT}' -B '${RESEARCH_WORKSPACE}/innovation_loop_20261003_session02/query_support_attempt01/run_analysis.py'",'```','',
+      '输入哈希与逐项检查见admission.json；精确端点见result.json；资源见resource_receipt.json。未加载producer、像素、mask、GPU或确认分数；没有新网络访问。']
+    with (OUT/'report.md').open('x',encoding='utf8',newline='\n') as f:f.write('\n'.join(report)+'\n')
+    mem=guard(plan)
+    resource={'status':'PASS_RESOURCE_LIMITS','wall_seconds':time.perf_counter()-START,'cpu_seconds':time.process_time()-CPU_START,
+              **mem,'output_bytes_before_receipt':sum(p.stat().st_size for p in OUT.rglob('*') if p.is_file()),
+              'limits':plan['resources'],'output_hashes':{p.name:sha(p) for p in OUT.iterdir() if p.is_file()},
+              'note':'File sizes and hashes use actual on-disk bytes, including platform newlines; receipt itself is excluded from its own hash/byte total.'}
+    write('resource_receipt.json',resource);guard(plan)
+    print(json.dumps({'status':result['status'],'primary':primary,'diagnostic_gate_pass':gate,'checks':len(CHECKS),
+                      'wall_seconds':resource['wall_seconds'],'peak_rss_bytes':resource['process_peak_rss_bytes']},ensure_ascii=False))
+
+
+if __name__=='__main__':
+    try:main()
+    except BaseException as error:
+        failure={'status':'STOP_ANALYSIS_FAILURE','error_type':type(error).__name__,'checks':CHECKS,
+                 'stack':[{'file':Path(f.filename).name,'line':f.lineno,'function':f.name} for f in traceback.extract_tb(error.__traceback__)]}
+        if not (OUT/'failure.json').exists():write('failure.json',failure)
+        print(json.dumps({'status':failure['status'],'error_type':failure['error_type'],'last_check':CHECKS[-1] if CHECKS else None}),flush=True)
+        sys.exit(1)

@@ -1,0 +1,319 @@
+# ARCHIVAL REFERENCE ONLY: not a runnable release entry point.
+# Historical source with environment prefixes replaced; see provenance/source_manifest.json.
+# Original bytes and release bytes are separately hashed. Do not bypass frozen admissions.
+"""One bounded, label-blind spatial deletion diagnostic; no payload persistence."""
+from pathlib import Path
+from collections import defaultdict
+import csv
+import gc
+import hashlib
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import time
+import traceback
+import uuid
+
+sys.dont_write_bytecode = True
+OUT = Path(__file__).resolve().parent
+HELPER = Path('${RESEARCH_WORKSPACE}/industrial_ad_20261003_realiad_local_evidence/run_round.py')
+UP = Path('${RESEARCH_WORKSPACE}/innovation_loop_20261003_session01/bank_coverage_attempt01')
+ROOT = Path('${PROJECT_ROOT}')
+CHECKPOINT = Path('${USER_HOME}/.cache/torch/hub/checkpoints/dinov2_vitb14_pretrain.pth')
+ORIGINALS = ('dino_odd_own', 'dino_balanced_own')
+METHODS = ORIGINALS + ('balanced_delete_topleft', 'balanced_delete_interior_sham')
+IDENTITY = ('category', 'path', 'group_key', 'camera', 'research_role')
+
+
+def sha(path):
+    digest=hashlib.sha256()
+    with path.open('rb') as f:
+        for block in iter(lambda:f.read(8*1024**2), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def read(path):
+    return json.loads(path.read_text(encoding='utf-8-sig'))
+
+
+def rows(path):
+    with path.open(encoding='utf-8-sig',newline='') as f:
+        return list(csv.DictReader(f))
+
+
+def save(name, value):
+    with (OUT/name).open('x',encoding='utf8') as f:
+        json.dump(value,f,indent=2,allow_nan=False)
+
+
+def csvsave(name, records):
+    with (OUT/name).open('x',encoding='utf8',newline='') as f:
+        writer=csv.DictWriter(f,fieldnames=list(records[0]))
+        writer.writeheader();writer.writerows(records)
+
+
+def region_masks(np, n=64):
+    rr,cc=np.indices((n,n))
+    result={'top_left':(rr==0)|(cc==0),'bottom_right':(rr==n-1)|(cc==n-1),
+            'outer_ring':(rr==0)|(cc==0)|(rr==n-1)|(cc==n-1),
+            'interior':(rr>0)&(rr<n-1)&(cc>0)&(cc<n-1)}
+    for r in (0,1):
+        for c in (0,1):
+            result[f'parity{r}{c}']=(rr%2==r)&(cc%2==c)
+    return {k:v.ravel() for k,v in result.items()}
+
+
+def summarize(np, row, method, distances, nearest, ties, source, masks):
+    assert distances.shape==nearest.shape==ties.shape==(4096,)
+    assert np.isfinite(distances).all() and (distances>=0).all()
+    result={k:row[k] for k in IDENTITY}
+    result['method']=method
+    result.update(max=float(distances.max()),mean=float(distances.mean()),p95=float(np.quantile(distances,.95)))
+    peak=int(np.argmax(distances))
+    image_ties=distances==distances[peak]
+    result['image_max_tie_count']=int(image_ties.sum())
+    for name,mask in masks.items():
+        result['image_max_ties_'+name]=int((image_ties&mask).sum())
+    def location(prefix,index):
+        proto=int(nearest[index]);origin=source[proto]
+        result[prefix+'argmax_row']=index//64
+        result[prefix+'argmax_col']=index%64
+        result[prefix+'nearest_prototype']=proto
+        result[prefix+'nearest_source_path']=origin['path']
+        result[prefix+'nearest_source_row']=origin['row']
+        result[prefix+'nearest_source_col']=origin['col']
+        result[prefix+'nearest_source_camera']=origin['camera']
+        result[prefix+'nearest_distance_tie_count']=int(ties[index])
+    location('',peak)
+    for name,mask in masks.items():
+        allowed=np.flatnonzero(mask)
+        index=int(allowed[np.argmax(distances[allowed])])
+        result[name+'_max']=float(distances[index])
+        result[name+'_max_tie_count']=int(np.count_nonzero(distances[allowed]==distances[index]))
+        location(name+'_',index)
+    return result
+
+
+def match_blocks(torch, np, query_tensor, banks, target_ids, sham_ids, guard):
+    """Identical FP32 arithmetic to upstream; shared balanced block for all subsets."""
+    output={k:[[],[],[]] for k in METHODS}
+    norms={k:(b*b).sum(1) for k,b in banks.items()}
+    target=torch.as_tensor(target_ids,device=query_tensor.device,dtype=torch.long)
+    sham=torch.as_tensor(sham_ids,device=query_tensor.device,dtype=torch.long)
+    violation={'balanced_delete_topleft':0,'balanced_delete_interior_sham':0}
+    def reduce(name,matrix):
+        values,indices=matrix.min(1)
+        tied=(matrix==values[:,None]).sum(1)
+        for out,value in zip(output[name],(values,indices,tied)):
+            out.append(value.cpu().numpy())
+        return values
+    with torch.no_grad():
+        for q in query_tensor.split(256):
+            guard()
+            for name in ORIGINALS:
+                bank=banks[name]
+                d=(q*q).sum(1,keepdim=True)+norms[name][None]-2*(q@bank.T)
+                d.clamp_min_(0)
+                baseline=reduce(name,d)
+                if name=='dino_balanced_own':
+                    for method,deleted in (('balanced_delete_topleft',target),('balanced_delete_interior_sham',sham)):
+                        masked=d.clone()
+                        masked[:,deleted]=float('inf')
+                        subset=reduce(method,masked)
+                        bad=int((subset<baseline).sum().item())
+                        violation[method]+=bad
+                        assert bad==0
+    return {k:tuple(np.concatenate(x) for x in v) for k,v in output.items()},violation
+
+
+def worker(nonce):
+    import numpy as np
+    from PIL import Image
+    claim=read(OUT/'execution_claim.json')
+    assert claim['worker_nonce']==nonce
+    preflight=read(OUT/'preflight.json')
+    assert preflight['status']=='PASS_METADATA_AND_LOCAL_DEPENDENCY_ADMISSION'
+    assert sha(Path(__file__))==preflight['producer_sha256']
+    for name,expected in {**preflight['dependency_hashes'],**preflight['checkpoint_hashes']}.items():
+        assert sha(Path(name))==expected
+    plan=read(OUT/'plan.json');limits=plan['resources']
+    assert plan['methods']==list(METHODS)
+    frozen=read(OUT/'intervention_identities.json')
+    assert frozen['plan_sha256']==sha(OUT/'plan.json')
+    assert len(frozen['target_ids'])==len(frozen['sham_ids'])==92
+    spec=importlib.util.spec_from_file_location('spatial_helpers',HELPER)
+    h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h);h.OUT=OUT
+    s=h.s
+    roles=s.load_manifest()['plastic_nut']
+    assert {k:len(v) for k,v in roles.items()}==plan['input_roles']
+    inputs={r['path']:r for r in rows(h.OLD/'attempt02/results/plastic_nut/inputs.csv')}
+    assert set(inputs)=={r['path'] for role in s.RUN_ROLES for r in roles[role]}
+    assert len(inputs)<=limits['new_image_members_max']
+    previous=read(UP/'prediction_freeze.json')
+    oldpred={r['path']:r for r in rows(UP/'scalar_predictions.csv')}
+    events=[]
+    deadline=time.perf_counter()+limits['image_acquisition_seconds']
+    token=h.local_token()
+    for attempt in range(3):
+        try:
+            ram=h.acquire('plastic_nut',inputs,token,deadline,'image')
+            events.append({'phase':'image','attempt':attempt+1,'status':'PASS'})
+            break
+        except h.transport.RangeError as error:
+            recover=str(error)=='transport failure; no credentials logged'
+            events.append({'phase':'image','attempt':attempt+1,'status':'TRANSIENT_TRANSPORT_FAILURE' if recover else 'VALIDATION_FAILURE',
+                           'partial_response_bytes':'UNKNOWN'})
+            if not recover or attempt==2 or time.perf_counter()>deadline:
+                save('transport_attempts.json',events)
+                raise
+            print('BOUNDED_TRANSPORT_RETRY',attempt+1,flush=True)
+    del token
+    save('transport_attempts.json',events)
+    assert time.perf_counter()<=deadline
+    started=time.perf_counter()
+    spatial=[];usage=[];scores=[];hashes={};errors={k:0.0 for k in ORIGINALS}
+    monotonic={k:0 for k in METHODS[2:]}
+    with s.Budget(started+limits['gpu_wall_seconds'],limits['rss_bytes'],s.WindowsHostMemory()) as budget:
+        import torch
+        torch.set_num_threads(4)
+        torch.backends.cuda.matmul.allow_tf32=False
+        torch.backends.cudnn.allow_tf32=False
+        torch.backends.cudnn.benchmark=False
+        assert torch.cuda.is_available()
+        torch.cuda.reset_peak_memory_stats()
+        sys.path.insert(0,str(ROOT/'artifacts/ram_ad_20260918/vendor/dinov2_source'))
+        from dinov2.hub.backbones import dinov2_vitb14
+        dino=dinov2_vitb14(pretrained=False)
+        dino.load_state_dict(torch.load(CHECKPOINT,map_location='cpu',weights_only=True),strict=True)
+        dino.eval().requires_grad_(False).cuda()
+        def embed(row):
+            budget.check()
+            assert row['research_role'] in s.RUN_ROLES and row['path'] in ram
+            with Image.open(io.BytesIO(ram[row['path']])) as im:
+                assert im.size==(1024,1024)
+                a=np.array(im.convert('RGB').resize((896,896),Image.Resampling.BILINEAR),dtype=np.float32)/255.
+            x=torch.from_numpy(a.transpose(2,0,1)).cuda()
+            x=(x-torch.tensor([.485,.456,.406],device='cuda')[:,None,None])/torch.tensor([.229,.224,.225],device='cuda')[:,None,None]
+            with torch.no_grad():
+                y=dino.get_intermediate_layers(x[None],n=(11,),norm=True)[0][0].cpu().numpy()
+            assert y.shape==(4096,768) and np.isfinite(y).all()
+            return y
+        banks={k:np.empty((4096,768),np.float32) for k in ORIGINALS}
+        selected=defaultdict(list)
+        for method,identities in frozen['original_bank_identities'].items():
+            assert method in ORIGINALS
+            for r in identities:
+                selected[r['path']].append((method,r))
+        count={k:0 for k in ORIGINALS};fit_embedded=0
+        for r in roles['source_fit']:
+            if r['path'] not in selected:
+                continue
+            feat=embed(r);fit_embedded+=1
+            for method,identity in selected[r['path']]:
+                banks[method][identity['prototype']]=feat[64*identity['row']+identity['col']]
+                count[method]+=1
+            if fit_embedded%100==0:
+                print('SOURCE_DINO896',fit_embedded,flush=True)
+        for method,bank in banks.items():
+            assert count[method]==4096
+            hashes[method]=hashlib.sha256(bank.tobytes()).hexdigest()
+            assert hashes[method]==previous['bank_hashes'][method]
+            banks[method]=torch.from_numpy(bank).cuda()
+        print('ORIGINAL_BANK_HASHES_REPRODUCED',flush=True)
+        masks=region_masks(np)
+        query=roles['source_calibration']+roles['development']
+        for i,r in enumerate(query):
+            feat=embed(r)
+            arrays,violations=match_blocks(torch,np,torch.from_numpy(np.ascontiguousarray(feat)).cuda(),banks,
+                                           frozen['target_ids'],frozen['sham_ids'],budget.check)
+            for k,v in violations.items():
+                monotonic[k]+=v
+            record={k:r[k] for k in IDENTITY}
+            for method,(distances,nearest,ties) in arrays.items():
+                source=frozen['original_bank_identities'][method if method in ORIGINALS else 'dino_balanced_own']
+                spatial.append(summarize(np,r,method,distances,nearest,ties,source,masks))
+                record[method]=float(distances.max())
+                if method in ORIGINALS:
+                    error=abs(record[method]-float(oldpred[r['path']][method]))
+                    errors[method]=max(errors[method],error)
+                    assert error==0
+            base,nearest,ties=arrays['dino_balanced_own'];peak=int(np.argmax(base))
+            target=np.isin(nearest,frozen['target_ids']);sham=np.isin(nearest,frozen['sham_ids'])
+            u={k:r[k] for k in IDENTITY}
+            u.update(target_nn_cells=int(target.sum()),sham_nn_cells=int(sham.sum()),
+                     argmax_uses_target=int(target[peak]),argmax_uses_sham=int(sham[peak]),
+                     target_changed_cells=int(np.count_nonzero(arrays[METHODS[2]][0]>base)),
+                     sham_changed_cells=int(np.count_nonzero(arrays[METHODS[3]][0]>base)),
+                     target_monotonic_violations=violations[METHODS[2]],sham_monotonic_violations=violations[METHODS[3]],
+                     evaluated_query_cells=4096)
+            usage.append(u);scores.append(record)
+            if (i+1)%100==0:
+                print('QUERY_DINO896',i+1,flush=True)
+        budget.check()
+        assert len(scores)==1135 and len(spatial)==4540 and all(v==0 for v in errors.values())
+        gpu_seconds=time.perf_counter()-started
+        peak_cuda=torch.cuda.max_memory_allocated()
+        del banks,dino,feat,arrays
+        gc.collect();torch.cuda.empty_cache()
+    ram.clear();gc.collect()
+    csvsave('spatial_statistics.csv',spatial)
+    csvsave('balanced_usage.csv',usage)
+    csvsave('scalar_predictions.csv',scores)
+    assert sum(p.stat().st_size for p in OUT.rglob('*') if p.is_file())<limits['persisted_bytes_limit']
+    freeze={'status':'SPATIAL_DIAGNOSTIC_PREDICTIONS_FROZEN','bank_hashes':hashes,
+            'reproduced_controls_max_error':errors,'total_monotonic_violations':monotonic,
+            'per_method_counts':{k:1135 for k in METHODS},'query_rows':1135,'fit_embedded_images':fit_embedded,
+            'monotonic_cells_per_subset':1135*4096,'gpu_wall_seconds':gpu_seconds,
+            'peak_cuda_allocated_bytes':peak_cuda,'plan_sha256':sha(OUT/'plan.json'),
+            'producer_sha256':sha(Path(__file__)),'intervention_sha256':sha(OUT/'intervention_identities.json'),
+            'sha256_files':{n:sha(OUT/n) for n in ('spatial_statistics.csv','balanced_usage.csv','scalar_predictions.csv')},
+            'scalar_sha256':sha(OUT/'scalar_predictions.csv'),'before_secondary_labels':True,
+            'confirmation_access':0,'mask_requests':0,'dense_maps_saved':False,'payload_saved':False,
+            'tie_policy':'First-index representative; all image-max regional tie counts and representative nearest-distance tie counts retained. NN usage counts refer to first-index representatives.'}
+    save('prediction_freeze.json',freeze)
+    print('SPATIAL_PREDICTIONS_FROZEN',flush=True)
+
+
+def safe_failure(error):
+    value={'status':'STOP_SANITIZED_FAILURE','error_type':type(error).__name__,
+           'stack':[{'file':Path(f.filename).name,'line':f.lineno,'function':f.name} for f in traceback.extract_tb(error.__traceback__)]}
+    if not (OUT/'failure.json').exists():
+        save('failure.json',value)
+    print('WORKER_STOP',type(error).__name__,flush=True)
+
+
+def main():
+    if len(sys.argv)==3 and sys.argv[1]=='--worker':
+        try:
+            worker(sys.argv[2]);return 0
+        except BaseException as error:
+            safe_failure(error);return 1
+    assert len(sys.argv)==1
+    for name in ('execution_claim.json','code_receipt.json','prediction_freeze.json','scalar_predictions.csv','spatial_statistics.csv','balanced_usage.csv','supervisor.json','failure.json'):
+        assert not (OUT/name).exists()
+    preflight=read(OUT/'preflight.json')
+    assert preflight['status']=='PASS_METADATA_AND_LOCAL_DEPENDENCY_ADMISSION'
+    assert sha(Path(__file__))==preflight['producer_sha256']
+    nonce=uuid.uuid4().hex
+    save('execution_claim.json',{'status':'ONE_BOUNDED_INFERENCE_CLAIMED','worker_nonce':nonce,'parent_pid':os.getpid()})
+    save('code_receipt.json',{'sha256':sha(Path(__file__)),'plan_sha256':sha(OUT/'plan.json')})
+    try:
+        result=subprocess.run([sys.executable,'-B',str(Path(__file__)),'--worker',nonce],
+                              timeout=read(OUT/'plan.json')['resources']['supervisor_seconds'])
+        save('supervisor.json',{'exit_code':result.returncode,'timeout':False})
+        return result.returncode
+    except subprocess.TimeoutExpired:
+        save('supervisor.json',{'exit_code':None,'timeout':True,'status':'HARD_WALL_STOP'})
+        return 1
+
+
+if __name__=='__main__':
+    try:
+        sys.exit(main())
+    except Exception as error:
+        safe_failure(error)
+        sys.exit(1)
